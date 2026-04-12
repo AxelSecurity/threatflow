@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '../lib/api'
+import { api, IocList } from '../lib/api'
 
 export function useIocs(filters: Record<string, string | number>) {
   return useQuery({
     queryKey: ['iocs', filters],
     queryFn: () => api.iocs.list(filters),
-    placeholderData: (prev: unknown) => prev,
+    placeholderData: (prev: IocList | undefined) => prev,
   })
 }
 
@@ -19,6 +19,30 @@ export function useDeleteIoc() {
 
 export function useSources() {
   return useQuery({ queryKey: ['sources'], queryFn: api.sources.list })
+}
+
+export function useCreateSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: object) => api.sources.create(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources'] }),
+  })
+}
+
+export function useToggleSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.sources.toggle(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources'] }),
+  })
+}
+
+export function useDeleteSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.sources.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources'] }),
+  })
 }
 
 export function useFlows() {

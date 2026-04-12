@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-do
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import Dashboard  from './pages/Dashboard'
 import FlowEditor from './pages/FlowEditor'
+import Sources    from './pages/Sources'
 import Login      from './pages/Login'
 import './index.css'
 
@@ -23,6 +24,7 @@ function Nav() {
       </div>
       <div className="nav-links">
         <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
+        <NavLink to="/sources" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Sorgenti</NavLink>
         <NavLink to="/flows" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Flow Editor</NavLink>
       </div>
       <div className="nav-status">
@@ -53,6 +55,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/" element={<ProtectedRoute><Nav /><Dashboard /></ProtectedRoute>} />
+      <Route path="/sources" element={<ProtectedRoute><Nav /><Sources /></ProtectedRoute>} />
       <Route path="/flows" element={<ProtectedRoute><Nav /><FlowEditor /></ProtectedRoute>} />
     </Routes>
   )
