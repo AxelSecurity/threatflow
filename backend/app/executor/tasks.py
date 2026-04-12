@@ -14,7 +14,7 @@ def execute_ingest_node(self, node_id: str, flow_id: str):
     try:
         parsed = parse_flow(flow_def)
     except FlowValidationError as e:
-        logger.error(f"[flow={flow_id}] Invalid flow: {e}"); return
+        logger.error(f"Invalid flow: {e}"); return
     node = parsed.nodes.get(node_id)
     if not node: return
     iocs = fetch_from_node(node)
@@ -27,8 +27,7 @@ def execute_ingest_node(self, node_id: str, flow_id: str):
 def execute_node(self, iocs: list, node_id: str, flow_id: str):
     flow_def = _load_flow(flow_id)
     if not flow_def: return
-    try:
-        parsed = parse_flow(flow_def)
+    try: parsed = parse_flow(flow_def)
     except FlowValidationError: return
     node = parsed.nodes.get(node_id)
     if not node: return

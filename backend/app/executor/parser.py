@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 NODE_CATEGORIES = {
     "http_feed":"ingest","taxii_in":"ingest","misp_in":"ingest","manual_in":"ingest",
@@ -18,13 +18,13 @@ class FlowNode:
 
 @dataclass
 class ParsedFlow:
-    nodes: dict[str, FlowNode]
-    adj:   dict[str, list[str]]
+    nodes: dict
+    adj: dict
 
-    def ingest_node_ids(self) -> list[str]:
+    def ingest_node_ids(self):
         return [id for id, n in self.nodes.items() if n.category == "ingest"]
 
-    def successors(self, node_id: str) -> list[str]:
+    def successors(self, node_id: str):
         return self.adj.get(node_id, [])
 
 class FlowValidationError(Exception):
@@ -48,12 +48,12 @@ def _validate(nodes, adj):
     for id, succs in adj.items():
         if nodes[id].category == "output" and succs:
             raise FlowValidationError(f"Output node {id} cannot have successors")
-    visited, in_stack = set(), set()
+    visited, stack = set(), set()
     def dfs(nid):
-        visited.add(nid); in_stack.add(nid)
+        visited.add(nid); stack.add(nid)
         for s in adj.get(nid, []):
             if s not in visited: dfs(s)
-            elif s in in_stack: raise FlowValidationError(f"Cycle detected at node {s}")
-        in_stack.discard(nid)
+            elif s in stack: raise FlowValidationError(f"Cycle at node {s}")
+        stack.discard(nid)
     for id in nodes:
         if id not in visited: dfs(id)

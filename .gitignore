@@ -9,4 +9,3 @@ dist/
 .mypy_cache/
 *.log
 .DS_Store
-*.key

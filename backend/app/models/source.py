@@ -4,9 +4,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base, UUIDMixin, TimestampMixin
 
-class FeedType(str):
-    TAXII="taxii"; HTTP="http"; CSV="csv"; MISP="misp"; MANUAL="manual"
-
 class Source(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "source"
     name:           Mapped[str]             = mapped_column(String(128), unique=True, nullable=False)

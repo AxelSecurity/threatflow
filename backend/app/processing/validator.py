@@ -13,12 +13,12 @@ class ValidationResult:
     error: ValidationError | None = None
     detail: str | None = None
 
-_RE_DOMAIN  = re.compile(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$")
-_RE_URL     = re.compile(r"^https?://", re.IGNORECASE)
-_RE_EMAIL   = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-_RE_MD5     = re.compile(r"^[a-fA-F0-9]{32}$")
-_RE_SHA1    = re.compile(r"^[a-fA-F0-9]{40}$")
-_RE_SHA256  = re.compile(r"^[a-fA-F0-9]{64}$")
+_RE_DOMAIN = re.compile(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$")
+_RE_URL    = re.compile(r"^https?://", re.IGNORECASE)
+_RE_EMAIL  = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_RE_MD5    = re.compile(r"^[a-fA-F0-9]{32}$")
+_RE_SHA1   = re.compile(r"^[a-fA-F0-9]{40}$")
+_RE_SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
 
 class IocValidator:
     def validate(self, value: str, ioc_type: str) -> ValidationResult:

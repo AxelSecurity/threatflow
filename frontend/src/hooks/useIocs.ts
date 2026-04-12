@@ -1,16 +1,26 @@
-import { useQuery } from '@tanstack/react-query'
-import { fetchIocs } from '../lib/api'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '../lib/api'
 
-interface IocFilters {
-  q?: string; ioc_type?: string; status?: string
-  min_score?: number; page: number; size: number
-}
-
-export function useIocs(filters: IocFilters) {
+export function useIocs(filters: Record<string, string | number>) {
   return useQuery({
     queryKey: ['iocs', filters],
-    queryFn: () => fetchIocs(filters as Record<string, string | number>),
+    queryFn: () => api.iocs.list(filters),
     placeholderData: (prev: unknown) => prev,
-    staleTime: 30_000,
   })
+}
+
+export function useDeleteIoc() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.iocs.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['iocs'] }),
+  })
+}
+
+export function useSources() {
+  return useQuery({ queryKey: ['sources'], queryFn: api.sources.list })
+}
+
+export function useFlows() {
+  return useQuery({ queryKey: ['flows'], queryFn: api.flows.list })
 }

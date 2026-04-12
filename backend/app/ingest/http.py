@@ -3,7 +3,7 @@ from .base import BaseConnector, RawIoc
 
 class HttpConnector(BaseConnector):
     async def fetch(self) -> list[RawIoc]:
-        url     = self.config["url"]
+        url     = self.config.get("url", "")
         fmt     = self.config.get("format", "txt")
         comment = self.config.get("comment", "#")
         timeout = self.config.get("timeout", 30)
@@ -14,7 +14,7 @@ class HttpConnector(BaseConnector):
         if fmt == "txt":   return self._parse_txt(text, comment)
         if fmt == "csv":   return self._parse_csv(text, comment)
         if fmt == "jsonl": return self._parse_jsonl(text)
-        raise ValueError(f"Formato non supportato: {fmt}")
+        raise ValueError(f"Unsupported format: {fmt}")
 
     def _parse_txt(self, text, comment):
         return [RawIoc(value=l.strip(), ioc_type=self.config.get("ioc_type"))
@@ -35,13 +35,14 @@ class HttpConnector(BaseConnector):
         return results
 
     def _parse_jsonl(self, text):
-        value_key = self.config.get("value_key", "value")
+        key = self.config.get("value_key", "value")
         results = []
         for line in text.splitlines():
             if not line.strip(): continue
             try:
                 obj = json.loads(line)
-                if v := obj.get(value_key):
+                if v := obj.get(key):
                     results.append(RawIoc(value=str(v), ioc_type=self.config.get("ioc_type"), raw_data=obj))
-            except json.JSONDecodeError: continue
+            except json.JSONDecodeError:
+                continue
         return results

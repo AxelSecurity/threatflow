@@ -17,7 +17,6 @@ def fetch_feed(self, source_id: str):
         connector = get_connector(source.feed_type, config)
         import asyncio
         raw_iocs = asyncio.run(connector.fetch())
-    logger.info(f"[{source.name}] Fetched {len(raw_iocs)} raw IOCs")
     r = get_redis()
     pipe = r.pipeline()
     for ioc in raw_iocs:
@@ -25,17 +24,18 @@ def fetch_feed(self, source_id: str):
             "source_id": source_id, "value": ioc.value,
             "ioc_type": ioc.ioc_type, "raw_data": ioc.raw_data}))
     pipe.execute()
+    logger.info(f"[{source.name}] Fetched {len(raw_iocs)} IOCs")
     with get_sync_session() as session:
-        source = session.get(Source, source_id)
-        source.last_fetched = datetime.now(timezone.utc)
+        src = session.get(Source, source_id)
+        src.last_fetched = datetime.now(timezone.utc)
         session.commit()
 
 @shared_task
 def schedule_all_feeds():
     from datetime import timedelta
+    now = datetime.now(timezone.utc)
     with get_sync_session() as session:
         sources = session.query(Source).filter(Source.active == True).all()
-        now = datetime.now(timezone.utc)
         for source in sources:
             if (source.last_fetched is None or
                     (now - source.last_fetched).seconds >= source.fetch_interval):

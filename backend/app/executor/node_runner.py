@@ -2,17 +2,15 @@ import json, logging, asyncio
 from app.ingest.registry import get_connector
 
 logger = logging.getLogger(__name__)
-RawIocDict = dict
 
-def fetch_from_node(node) -> list[RawIocDict]:
-    config = {**node.config}
+def fetch_from_node(node) -> list:
     feed_type = "taxii" if node.type == "taxii_in" else "misp" if node.type == "misp_in" else "http"
-    connector = get_connector(feed_type, config)
-    raw_iocs = asyncio.run(connector.fetch())
+    connector = get_connector(feed_type, {**node.config})
+    raw_iocs  = asyncio.run(connector.fetch())
     return [{"value": r.value, "ioc_type": r.ioc_type, "raw_data": r.raw_data, "source_id": None}
             for r in raw_iocs]
 
-def run_processing_node(node, iocs: list[RawIocDict]) -> list[RawIocDict]:
+def run_processing_node(node, iocs: list) -> list:
     t, cfg = node.type, node.config
     if t == "filter_type":
         return [i for i in iocs if i.get("ioc_type") == cfg.get("ioc_type")]
@@ -28,7 +26,7 @@ def run_processing_node(node, iocs: list[RawIocDict]) -> list[RawIocDict]:
         return result
     return iocs
 
-def run_output_node(node, iocs: list[RawIocDict]):
+def run_output_node(node, iocs: list):
     _persist_iocs(iocs)
     t, cfg = node.type, node.config
     if t == "export_flat":   _output_flat(iocs, cfg)
@@ -60,7 +58,7 @@ def _output_syslog(iocs, cfg):
     import socket
     host, port = cfg.get("host", "localhost"), int(cfg.get("port", 514))
     proto = cfg.get("proto", "syslog")
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock  = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     for ioc in iocs:
         msg = (f"CEF:0|ThreatFlow|IOC|1.0|100|Indicator|5|cs1={ioc['value']}"
                if proto == "cef" else f"<14>ThreatFlow: ioc={ioc['value']}")

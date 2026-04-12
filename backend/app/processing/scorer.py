@@ -8,8 +8,7 @@ class ScoreContext:
 
 _TYPE_BASE = {
     "sha256": 70, "sha1": 65, "md5": 60,
-    "ipv4": 50,   "ipv6": 50, "domain": 55,
-    "url": 55,    "email": 45,
+    "ipv4": 50, "ipv6": 50, "domain": 55, "url": 55, "email": 45,
 }
 
 def compute_score(ctx: ScoreContext) -> float:

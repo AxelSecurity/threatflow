@@ -9,8 +9,8 @@ class RawIoc:
     raw_data: dict[str, Any] | None = None
 
 class BaseConnector(ABC):
-    def __init__(self, source_config: dict[str, Any]):
-        self.config = source_config
+    def __init__(self, config: dict[str, Any]):
+        self.config = config
 
     @abstractmethod
     async def fetch(self) -> list[RawIoc]: ...

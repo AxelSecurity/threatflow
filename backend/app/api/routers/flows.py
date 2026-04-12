@@ -11,8 +11,7 @@ from app.executor.tasks import schedule_all_flows
 router = APIRouter(prefix="/flows", tags=["Flows"])
 
 class FlowCreate(BaseModel):
-    name: str
-    definition: dict
+    name: str; definition: dict
 
 @router.get("")
 def list_flows(db: Annotated[Session, Depends(get_db)]):
@@ -26,19 +25,19 @@ def create_flow(payload: FlowCreate, db: Annotated[Session, Depends(get_db)]):
     db.add(flow); db.commit(); db.refresh(flow); return flow
 
 @router.post("/{flow_id}/activate")
-def activate_flow(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
+def activate(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)
     if not flow: raise HTTPException(404)
     flow.active = True; db.commit()
     schedule_all_flows.delay()
-    return {"detail": "flow activated"}
+    return {"detail": "activated"}
 
 @router.post("/{flow_id}/deactivate")
-def deactivate_flow(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
+def deactivate(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)
     if not flow: raise HTTPException(404)
     flow.active = False; db.commit()
-    return {"detail": "flow deactivated"}
+    return {"detail": "deactivated"}
 
 @router.delete("/{flow_id}", status_code=204)
 def delete_flow(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):

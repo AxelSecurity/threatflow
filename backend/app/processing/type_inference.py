@@ -1,5 +1,5 @@
 import ipaddress, re
-from app.processing.validator import _RE_MD5, _RE_SHA1, _RE_SHA256, _RE_DOMAIN, _RE_EMAIL, _RE_URL
+from .validator import _RE_MD5, _RE_SHA1, _RE_SHA256, _RE_DOMAIN, _RE_EMAIL, _RE_URL
 
 def infer_type(value: str) -> str | None:
     v = value.strip()

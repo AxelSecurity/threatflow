@@ -1,0 +1,55 @@
+:root {
+  --bg0: #05090e;
+  --bg1: #090f17;
+  --bg2: #0d1620;
+  --bg3: #112030;
+  --bd1: #182538;
+  --bd2: #1f3350;
+  --bd3: #2c4870;
+  --t0: #ecf4ff;
+  --t1: #9ab8d4;
+  --t2: #4a7090;
+  --t3: #243a50;
+  --cyan: #00d4ff;
+  --cyan2: #0088bb;
+  --cyanx: rgba(0,212,255,.08);
+  --green: #00f090;
+  --green2: #008855;
+  --greenx: rgba(0,240,144,.07);
+  --amber: #ffaa20;
+  --amberx: rgba(255,170,32,.08);
+  --red: #ff3355;
+  --redx: rgba(255,51,85,.07);
+  --blue: #4488ff;
+  --bluex: rgba(68,136,255,.08);
+  --mono: 'Courier New', Courier, monospace;
+  --r: 4px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg0); color: var(--t0); font-family: system-ui, -apple-system, sans-serif; font-size: 13px; }
+
+/* NAV */
+.nav {
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 20px; height: 48px;
+  background: var(--bg1); border-bottom: 1px solid var(--bd1);
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-brand { display: flex; align-items: center; gap: 6px; margin-right: 12px; }
+.nav-logo { font-size: 18px; color: var(--cyan); }
+.nav-name { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--cyan); letter-spacing: .06em; }
+.nav-ver { font-family: var(--mono); font-size: 9px; color: var(--t3); }
+.nav-links { display: flex; gap: 4px; }
+.nav-link {
+  padding: 5px 12px; border-radius: var(--r);
+  font-size: 11px; color: var(--t2); text-decoration: none;
+  font-family: var(--mono); letter-spacing: .04em;
+  transition: all .12s;
+}
+.nav-link:hover { color: var(--t1); background: var(--bg2); }
+.nav-link.active { background: var(--cyanx); color: var(--cyan); border: 1px solid rgba(0,212,255,.2); }
+.nav-status { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,240,144,.5)} 50%{box-shadow:0 0 0 5px rgba(0,240,144,0)} }
+.status-txt { font-family: var(--mono); font-size: 10px; color: var(--green); }
