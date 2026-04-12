@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import app.core.celery_app  # noqa — deve essere il primo import: inizializza Celery con il broker corretto
 from app.api.routers import iocs, sources, export, flows, auth
 from app.api.deps import RequireAny, RequireAnalyst
-import app.core.celery_app  # noqa — registra l'istanza Celery con il broker corretto
 
 
 @asynccontextmanager
