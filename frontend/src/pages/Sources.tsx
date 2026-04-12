@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSources, useCreateSource, useToggleSource, useDeleteSource } from '../hooks/useIocs'
 import { api } from '../lib/api'
 
@@ -47,6 +48,7 @@ const labelStyle: React.CSSProperties = {
 }
 
 export default function Sources() {
+  const qc = useQueryClient()
   const { data: sources = [], isLoading } = useSources()
   const createMut  = useCreateSource()
   const toggleMut  = useToggleSource()
@@ -92,7 +94,12 @@ export default function Sources() {
     try {
       await api.sources.fetch(id)
       setFetchedIds(prev => new Set(prev).add(id))
-      setTimeout(() => setFetchedIds(prev => { const s = new Set(prev); s.delete(id); return s }), 3000)
+      // Dopo 3s il worker ha quasi certamente finito: aggiorna sources (last_fetched) e iocs
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ['sources'] })
+        qc.invalidateQueries({ queryKey: ['iocs'] })
+        setFetchedIds(prev => { const s = new Set(prev); s.delete(id); return s })
+      }, 3000)
     } finally {
       setFetchingId(null)
     }

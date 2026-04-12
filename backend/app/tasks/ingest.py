@@ -6,6 +6,7 @@ from app.db import get_sync_session
 from app.models.source import Source
 from app.ingest.registry import get_connector
 from app.core.redis import get_redis
+from app.processing.pipeline import process_raw_queue
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +17,13 @@ def fetch_feed(self, source_id: str):
         source = session.get(Source, source_id)
         if not source or not source.active:
             return
+        source_name = source.name
         config = {**source.config, "url": source.url}
         connector = get_connector(source.feed_type, config)
         import asyncio
         raw_iocs = asyncio.run(connector.fetch())
 
+    # Accoda i valori grezzi su Redis
     r = get_redis()
     pipe = r.pipeline()
     for ioc in raw_iocs:
@@ -31,8 +34,13 @@ def fetch_feed(self, source_id: str):
             "raw_data":  ioc.raw_data,
         }))
     pipe.execute()
-    logger.info(f"[{source.name}] Fetched {len(raw_iocs)} IOCs")
+    logger.info(f"[{source_name}] Fetched {len(raw_iocs)} raw IOCs — processing...")
 
+    # Processa subito la coda: valida, normalizza, upsert nel DB
+    process_raw_queue(batch_size=len(raw_iocs) + 1)
+    logger.info(f"[{source_name}] Processing complete")
+
+    # Aggiorna last_fetched
     with get_sync_session() as session:
         src = session.get(Source, source_id)
         src.last_fetched = datetime.now(timezone.utc)
