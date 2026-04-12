@@ -1,9 +1,21 @@
-from fastapi import FastAPI, Depends
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routers import iocs, sources, export, flows, auth
-from app.api.deps import RequireAny, RequireAnalyst, RequireAdmin
+from app.api.deps import RequireAny, RequireAnalyst
 
-app = FastAPI(title="ThreatFlow API", version="0.1.0", docs_url="/api/docs")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Crea tutte le tabelle all'avvio se non esistono già
+    from app.db import engine
+    from app.models.base import Base
+    from app.models import ioc, source, tag, flow, user  # noqa — registra i modelli
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(title="ThreatFlow API", version="0.1.0", docs_url="/api/docs", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
