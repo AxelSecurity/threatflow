@@ -57,6 +57,16 @@ def deactivate(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
     flow.active = False; db.commit()
     return {"detail": "deactivated"}
 
+@router.post("/{flow_id}/run")
+def run_flow(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
+    flow = db.get(Flow, flow_id)
+    if not flow: raise HTTPException(404)
+    from app.executor.tasks import execute_ingest_node, parse_flow
+    parsed = parse_flow(flow.definition)
+    for nid in parsed.ingest_node_ids():
+        execute_ingest_node.delay(nid, str(flow.id))
+    return {"detail": "Flow execution triggered"}
+
 @router.delete("/{flow_id}", status_code=204)
 def delete_flow(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)

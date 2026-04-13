@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useFlows, useCreateFlow, useUpdateFlow, useSources } from '../hooks/useIocs'
+import { useFlows, useCreateFlow, useUpdateFlow, useSources, useRunFlow } from '../hooks/useIocs'
 
 const NW = 168, NH = 62
 
@@ -40,6 +40,7 @@ export default function FlowEditor() {
   const { data: sources } = useSources()
   const createFlow = useCreateFlow()
   const updateFlow = useUpdateFlow()
+  const runFlow    = useRunFlow()
 
   const [id, setId]       = useState<string | null>(null)
   const [nodes, setNodes] = useState<NodeData[]>([])
@@ -225,6 +226,29 @@ export default function FlowEditor() {
             <span style={{fontSize:9,color:saveStatus==='error'?'#ff5572':saveStatus==='saved'?'#00dfa0':'#4a5c70',textTransform:'uppercase',letterSpacing:'.05em'}}>
               {saveStatus==='saving'?'Salvataggio...':saveStatus==='saved'?'Salvato':saveStatus==='error'?'Errore salvataggio':'In attesa'}
             </span>
+            {id && (
+              <button 
+                onClick={() => runFlow.mutate(id)}
+                disabled={runFlow.isPending}
+                style={{
+                  marginLeft: 12,
+                  background: runFlow.isPending ? '#232d3a' : 'rgba(0,223,160,0.1)',
+                  border: `1px solid ${runFlow.isPending ? '#3d5268' : '#00dfa0'}`,
+                  borderRadius: 3,
+                  padding: '3px 8px',
+                  color: runFlow.isPending ? '#7a92aa' : '#00dfa0',
+                  fontSize: 9,
+                  fontFamily: 'var(--mono)',
+                  cursor: runFlow.isPending ? 'default' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  transition: 'all 0.1s'
+                }}
+              >
+                {runFlow.isPending ? 'Esecuzione...' : runFlow.isSuccess ? 'Eseguito ✓' : 'Esegui Ora'}
+              </button>
+            )}
           </div>
         </div>
         {sel && <button onClick={()=>deleteNode(sel)} style={{background:'rgba(255,85,114,.08)',border:'1px solid rgba(255,85,114,.35)',borderRadius:3,padding:'4px 11px',fontFamily:'var(--mono)',fontSize:10,color:'#ff5572',cursor:'pointer'}}>elimina nodo</button>}

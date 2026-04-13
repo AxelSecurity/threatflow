@@ -9,19 +9,21 @@ def fetch_from_node(node) -> list:
     if node.type == "source_ingest":
         source_id = node.config.get("source_id")
         if not source_id: return []
+        from app.models.ioc import Ioc, IocSource
         with get_sync_session() as session:
-            source = session.get(Source, uuid.UUID(source_id))
-            if not source: return []
-            feed_type = source.feed_type
-            config = {**(source.config or {}), "url": source.url}
-    else:
-        feed_type = "taxii" if node.type == "taxii_in" else "misp" if node.type == "misp_in" else "http"
-        config = {**node.config}
+            # Query IOCs linked to this source via IocSource
+            results = (session.query(Ioc)
+                      .join(IocSource)
+                      .filter(IocSource.source_id == uuid.UUID(source_id))
+                      .all())
+            return [{"value": r.value, "ioc_type": r.ioc_type, "score": r.score, "tlp": r.tlp} for r in results]
     
+    # Legacy/Direct fetch for other ingest types (if they still exist as manual config)
+    feed_type = "taxii" if node.type == "taxii_in" else "misp" if node.type == "misp_in" else "http"
+    config = {**node.config}
     connector = get_connector(feed_type, config)
     raw_iocs  = asyncio.run(connector.fetch())
-    return [{"value": r.value, "ioc_type": r.ioc_type, "raw_data": r.raw_data, "source_id": None}
-            for r in raw_iocs]
+    return [{"value": r.value, "ioc_type": r.ioc_type, "raw_data": r.raw_data} for r in raw_iocs]
 
 def run_processing_node(node, iocs: list) -> list:
     t, cfg = node.type, node.config
@@ -72,7 +74,9 @@ def _output_flat(iocs, cfg):
         elif fmt == "csv":
             f.write("value,ioc_type,score\n")
             for i in iocs: f.write(f"{i['value']},{i.get('ioc_type','')},{i.get('score','')}\n")
-        else: f.write("\n".join(i["value"] for i in iocs))
+        else:
+            content = "\n".join(i["value"] for i in iocs)
+            f.write(content if content else "") # Assicura che il file venga creato/pulito
 
 def _output_syslog(iocs, cfg):
     import socket

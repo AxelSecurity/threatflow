@@ -78,6 +78,7 @@ export const api = {
     list:       ()              => req<Flow[]>('/flows'),
     create:     (body: object)  => req<Flow>('/flows', { method: 'POST', body: JSON.stringify(body) }),
     update:     (id: string, body: object) => req<Flow>(`/flows/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    run:        (id: string)    => req<object>(`/flows/${id}/run`, { method: 'POST' }),
     activate:   (id: string)    => req<object>(`/flows/${id}/activate`, { method: 'POST' }),
     deactivate: (id: string)    => req<object>(`/flows/${id}/deactivate`, { method: 'POST' }),
     delete:     (id: string)    => req<null>(`/flows/${id}`, { method: 'DELETE' }),

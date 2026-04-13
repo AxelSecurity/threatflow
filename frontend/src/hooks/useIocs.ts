@@ -90,3 +90,9 @@ export function useUpdateFlow() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['flows'] }),
   })
 }
+
+export function useRunFlow() {
+  return useMutation({
+    mutationFn: (id: string) => api.flows.run(id),
+  })
+}
