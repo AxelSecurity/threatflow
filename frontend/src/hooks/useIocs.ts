@@ -74,3 +74,19 @@ export function useDeleteSource() {
 export function useFlows() {
   return useQuery({ queryKey: ['flows'], queryFn: api.flows.list })
 }
+
+export function useCreateFlow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; definition: object }) => api.flows.create(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['flows'] }),
+  })
+}
+
+export function useUpdateFlow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: object }) => api.flows.update(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['flows'] }),
+  })
+}

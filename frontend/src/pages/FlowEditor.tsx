@@ -1,14 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useFlows } from '../hooks/useIocs'
-import { api } from '../lib/api'
+import { useFlows, useCreateFlow, useUpdateFlow, useSources } from '../hooks/useIocs'
 
 const NW = 168, NH = 62
 
 const NODE_DEFS: Record<string, { label: string; cat: 'i'|'p'|'o'; hasIn: boolean; hasOut: boolean; fields: Array<{key:string;label:string;type:string;options?:string[]}> }> = {
-  http_feed:    { label:'HTTP Feed',     cat:'i', hasIn:false, hasOut:true,  fields:[{key:'url',label:'URL',type:'text'},{key:'format',label:'Formato',type:'select',options:['txt','csv','jsonl']},{key:'interval',label:'Intervallo (s)',type:'number'}] },
-  taxii_in:     { label:'TAXII In',      cat:'i', hasIn:false, hasOut:true,  fields:[{key:'url',label:'URL',type:'text'},{key:'collection',label:'Collection',type:'text'}] },
-  misp_in:      { label:'MISP In',       cat:'i', hasIn:false, hasOut:true,  fields:[{key:'url',label:'URL',type:'text'},{key:'api_key',label:'API Key',type:'password'}] },
-  manual_in:    { label:'Input manuale', cat:'i', hasIn:false, hasOut:true,  fields:[] },
+  source_ingest: { label:'Ingest Sorgente', cat:'i', hasIn:false, hasOut:true,  fields:[] },
   filter_type:  { label:'Filtro tipo',   cat:'p', hasIn:true,  hasOut:true,  fields:[{key:'ioc_type',label:'Tipo IOC',type:'select',options:['ipv4','ipv6','domain','url','md5','sha1','sha256','email']}] },
   filter_tlp:   { label:'Filtro TLP',    cat:'p', hasIn:true,  hasOut:true,  fields:[{key:'tlp',label:'TLP',type:'select',options:['white','green','amber','red']}] },
   filter_score: { label:'Filtro score',  cat:'p', hasIn:true,  hasOut:true,  fields:[{key:'min_score',label:'Score minimo',type:'range'}] },
@@ -17,7 +13,14 @@ const NODE_DEFS: Record<string, { label: string; cat: 'i'|'p'|'o'; hasIn: boolea
   siem_out:     { label:'SIEM/Syslog',   cat:'o', hasIn:true,  hasOut:false, fields:[{key:'host',label:'Host',type:'text'},{key:'port',label:'Porta',type:'number'},{key:'proto',label:'Proto',type:'select',options:['syslog','cef']}] },
   firewall_out: { label:'Firewall REST', cat:'o', hasIn:true,  hasOut:false, fields:[{key:'url',label:'Endpoint',type:'text'},{key:'api_key',label:'API Key',type:'password'}] },
   taxii_out:    { label:'TAXII Out',     cat:'o', hasIn:true,  hasOut:false, fields:[{key:'url',label:'URL',type:'text'},{key:'collection',label:'Collection',type:'text'}] },
+  // Legacy types to prevent crash on old data
+  http_feed:    { label:'HTTP Feed (Legacy)', cat:'i', hasIn:false, hasOut:true, fields:[] },
+  taxii_in:     { label:'TAXII In (Legacy)',  cat:'i', hasIn:false, hasOut:true, fields:[] },
+  misp_in:      { label:'MISP In (Legacy)',   cat:'i', hasIn:false, hasOut:true, fields:[] },
+  manual_in:    { label:'Manual In (Legacy)', cat:'i', hasIn:false, hasOut:true, fields:[] },
 }
+
+const getDef = (type: string) => NODE_DEFS[type] || { label:'Unknown', cat:'p' as const, hasIn:true, hasOut:true, fields:[] }
 
 const CAT_COLOR = { i:'#00dfa0', p:'#f0a020', o:'#ff5572' }
 
@@ -32,31 +35,70 @@ function bezier(x1:number,y1:number,x2:number,y2:number) {
 function outPort(n:NodeData) { return { x:n.x+NW, y:n.y+NH/2 } }
 function inPort(n:NodeData)  { return { x:n.x,    y:n.y+NH/2 } }
 
-const DEFAULT_NODES: NodeData[] = [
-  { id:'n1', type:'http_feed',   x:60,  y:80,  cfg:{url:'https://feodotracker.abuse.ch/downloads/ipblocklist.txt',format:'txt',interval:3600} },
-  { id:'n2', type:'filter_type', x:300, y:80,  cfg:{ioc_type:'ipv4'} },
-  { id:'n3', type:'export_flat', x:540, y:80,  cfg:{path:'/exports/ipv4.txt',format:'txt'} },
-  { id:'n4', type:'http_feed',   x:60,  y:220, cfg:{url:'https://urlhaus-api.abuse.ch/v1/urls/recent/',format:'jsonl',interval:1800} },
-  { id:'n5', type:'filter_type', x:300, y:220, cfg:{ioc_type:'domain'} },
-  { id:'n6', type:'siem_out',    x:540, y:220, cfg:{host:'192.168.1.10',port:514,proto:'syslog'} },
-]
-const DEFAULT_CONNS: ConnData[] = [
-  {id:'c1',from:'n1',to:'n2'},{id:'c2',from:'n2',to:'n3'},
-  {id:'c3',from:'n4',to:'n5'},{id:'c4',from:'n5',to:'n6'},
-]
-
 export default function FlowEditor() {
-  const [nodes, setNodes] = useState<NodeData[]>(DEFAULT_NODES)
-  const [conns, setConns] = useState<ConnData[]>(DEFAULT_CONNS)
+  const { data: flows } = useFlows()
+  const { data: sources } = useSources()
+  const createFlow = useCreateFlow()
+  const updateFlow = useUpdateFlow()
+
+  const [id, setId]       = useState<string | null>(null)
+  const [nodes, setNodes] = useState<NodeData[]>([])
+  const [conns, setConns] = useState<ConnData[]>([])
   const [sel, setSel]     = useState<string|null>(null)
   const [drag, setDrag]   = useState<{id:string;sx:number;sy:number;ox:number;oy:number}|null>(null)
   const [wire, setWire]   = useState<{fid:string;cx:number;cy:number}|null>(null)
   const [cfg,  setCfg]    = useState<Record<string,string|number>>({})
-  const [showSave, setShowSave] = useState(false)
-  const [saveJson, setSaveJson] = useState('')
-  const nc = useRef(DEFAULT_NODES.length)
-  const cc = useRef(DEFAULT_CONNS.length)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  const nc = useRef(0)
+  const cc = useRef(0)
   const cvRef = useRef<HTMLDivElement>(null)
+  const isInitialLoad = useRef(true)
+
+  // Initialization: load or create flow
+  useEffect(() => {
+    if (!flows) return
+    if (flows.length > 0) {
+      const f = flows[0]
+      setId(f.id)
+      const def = f.definition as any
+      setNodes(def.nodes?.map((n:any)=>( { id:n.id, type:n.type, x:n.position.x, y:n.position.y, cfg:n.config } )) || [])
+      setConns(def.connections || [])
+      nc.current = def.nodes?.length ? Math.max(...def.nodes.map((n:any)=>parseInt(n.id.replace('n',''))), 0) : 0
+      cc.current = def.connections?.length ? Math.max(...def.connections.map((c:any)=>parseInt(c.id.replace('c',''))), 0) : 0
+    } else {
+      createFlow.mutate({ 
+        name: 'Main Flow', 
+        definition: { nodes: [], connections: [] }
+      })
+    }
+  }, [flows])
+
+  // Auto-save logic
+  useEffect(() => {
+    if (isInitialLoad.current) {
+      if (nodes.length > 0) isInitialLoad.current = false
+      return
+    }
+    if (!id) return
+
+    setSaveStatus('saving')
+    const timer = setTimeout(() => {
+      const definition = {
+        nodes: nodes.map(n=>({id:n.id,type:n.type,position:{x:n.x,y:n.y},config:n.cfg})),
+        connections: conns.map(c=>({id:c.id,from:c.from,to:c.to}))
+      }
+      updateFlow.mutate({ id, body: { definition } }, {
+        onSuccess: () => {
+          setSaveStatus('saved')
+          setTimeout(() => setSaveStatus(s => s === 'saved' ? 'idle' : s), 2000)
+        },
+        onError: () => setSaveStatus('error')
+      })
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [nodes, conns, id])
 
   const byId = (id:string) => nodes.find(n=>n.id===id)
 
@@ -151,34 +193,41 @@ export default function FlowEditor() {
     const d = NODE_DEFS[t]
     const id = 'n'+(++nc.current)
     const defCfg: Record<string,string|number> = {}
-    d.fields.forEach(f=>{ defCfg[f.key] = f.type==='number'?0:f.type==='range'?50:'' })
+    
+    if (t === 'source_ingest') {
+      const sid = e.dataTransfer.getData('sid')
+      const sname = e.dataTransfer.getData('sname')
+      defCfg.source_id = sid
+      defCfg.source_name = sname
+    } else {
+      d.fields.forEach(f=>{ defCfg[f.key] = f.type==='number'?0:f.type==='range'?50:'' })
+    }
+    
     setNodes(ns=>[...ns,{id,type:t,x:Math.max(0,p.x-NW/2),y:Math.max(0,p.y-NH/2),cfg:defCfg}])
     setSel(id)
   }
 
-  const saveFlow = () => {
-    const payload = {
-      nodes: nodes.map(n=>({id:n.id,type:n.type,position:{x:n.x,y:n.y},config:n.cfg})),
-      connections: conns.map(c=>({id:c.id,from:c.from,to:c.to}))
-    }
-    setSaveJson(JSON.stringify(payload,null,2))
-    setShowSave(true)
-  }
-
   const selNode = sel ? byId(sel) : null
-  const selDef  = selNode ? NODE_DEFS[selNode.type] : null
+  const selDef  = selNode ? getDef(selNode.type) : null
 
-  const GROUPS: Array<{cat:'i'|'p'|'o';label:string}> = [{cat:'i',label:'Ingest'},{cat:'p',label:'Processing'},{cat:'o',label:'Output'}]
+  const GROUPS: Array<{cat:'i'|'p'|'o';label:string}> = [{cat:'i',label:'Ingest (Sorgenti)'},{cat:'p',label:'Processing'},{cat:'o',label:'Output'}]
 
   return (
     <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 48px)',background:'#080b0f',fontFamily:'var(--mono)',color:'#dde6f0'}}>
 
       {/* TOPBAR */}
       <div style={{display:'flex',alignItems:'center',gap:8,padding:'7px 14px',background:'#0f1318',borderBottom:'1px solid #232d3a',flexShrink:0}}>
-        <span style={{fontSize:10,color:'#4a5c70',flex:1}}>drag nodi dalla palette · trascina porta→porta per connettere · click su una connessione per eliminarla</span>
+        <div style={{display:'flex',alignItems:'center',gap:10,flex:1}}>
+          <span style={{fontSize:10,color:'#4a5c70'}}>drag nodi dalla palette · trascina porta→porta per connettere</span>
+          <div style={{width:1,height:12,background:'#232d3a'}}/>
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <div style={{width:6,height:6,borderRadius:'50%',background:saveStatus==='saving'?'#f0a020':saveStatus==='error'?'#ff5572':saveStatus==='saved'?'#00dfa0':'#232d3a'}}/>
+            <span style={{fontSize:9,color:saveStatus==='error'?'#ff5572':saveStatus==='saved'?'#00dfa0':'#4a5c70',textTransform:'uppercase',letterSpacing:'.05em'}}>
+              {saveStatus==='saving'?'Salvataggio...':saveStatus==='saved'?'Salvato':saveStatus==='error'?'Errore salvataggio':'In attesa'}
+            </span>
+          </div>
+        </div>
         {sel && <button onClick={()=>deleteNode(sel)} style={{background:'rgba(255,85,114,.08)',border:'1px solid rgba(255,85,114,.35)',borderRadius:3,padding:'4px 11px',fontFamily:'var(--mono)',fontSize:10,color:'#ff5572',cursor:'pointer'}}>elimina nodo</button>}
-        <button onClick={()=>{setNodes(DEFAULT_NODES);setConns(DEFAULT_CONNS);setSel(null)}} style={{background:'#1c2330',border:'1px solid #2a3240',borderRadius:3,padding:'4px 11px',fontFamily:'var(--mono)',fontSize:10,color:'#8899b0',cursor:'pointer'}}>reset</button>
-        <button onClick={saveFlow} style={{background:'rgba(0,223,160,.09)',border:'1px solid #00a872',borderRadius:3,padding:'4px 11px',fontFamily:'var(--mono)',fontSize:10,color:'#00dfa0',cursor:'pointer'}}>salva JSON</button>
       </div>
 
       <div style={{display:'flex',flex:1,overflow:'hidden'}}>
@@ -188,16 +237,36 @@ export default function FlowEditor() {
           {GROUPS.map(({cat,label})=>(
             <div key={cat}>
               <div style={{fontSize:9,fontWeight:500,textTransform:'uppercase',letterSpacing:'.1em',color:'#3d5268',padding:'10px 11px 5px'}}>{label}</div>
-              {Object.entries(NODE_DEFS).filter(([,d])=>d.cat===cat).map(([t,d])=>(
-                <div key={t} draggable onDragStart={e=>e.dataTransfer.setData('ntype',t)}
-                  style={{display:'flex',alignItems:'center',gap:7,padding:'6px 11px',cursor:'grab',userSelect:'none',transition:'background .1s'}}
-                  onMouseEnter={e=>(e.currentTarget.style.background='#161b23')}
-                  onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
-                >
-                  <div style={{width:7,height:7,borderRadius:1.5,background:CAT_COLOR[cat],flexShrink:0}}/>
-                  <span style={{fontSize:11,color:'#7a92aa'}}>{d.label}</span>
-                </div>
-              ))}
+              
+              {cat === 'i' ? (
+                /* Dynamic sources for Ingest */
+                sources?.map(src => (
+                  <div key={src.id} draggable onDragStart={e=>{
+                    e.dataTransfer.setData('ntype','source_ingest');
+                    e.dataTransfer.setData('sid', src.id);
+                    e.dataTransfer.setData('sname', src.name);
+                  }}
+                    style={{display:'flex',alignItems:'center',gap:7,padding:'6px 11px',cursor:'grab',userSelect:'none',transition:'background .1s'}}
+                    onMouseEnter={e=>(e.currentTarget.style.background='#161b23')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                  >
+                    <div style={{width:7,height:7,borderRadius:1.5,background:CAT_COLOR[cat],flexShrink:0}}/>
+                    <span style={{fontSize:11,color:'#7a92aa',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{src.name}</span>
+                  </div>
+                ))
+              ) : (
+                /* Static nodes for P & O */
+                Object.entries(NODE_DEFS).filter(([,d])=>d.cat===cat).map(([t,d])=>(
+                  <div key={t} draggable onDragStart={e=>e.dataTransfer.setData('ntype',t)}
+                    style={{display:'flex',alignItems:'center',gap:7,padding:'6px 11px',cursor:'grab',userSelect:'none',transition:'background .1s'}}
+                    onMouseEnter={e=>(e.currentTarget.style.background='#161b23')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                  >
+                    <div style={{width:7,height:7,borderRadius:1.5,background:CAT_COLOR[cat],flexShrink:0}}/>
+                    <span style={{fontSize:11,color:'#7a92aa'}}>{d.label}</span>
+                  </div>
+                ))
+              )}
             </div>
           ))}
         </div>
@@ -217,9 +286,10 @@ export default function FlowEditor() {
                 const f=byId(c.from),t=byId(c.to)
                 if(!f||!t) return null
                 const p1=outPort(f),p2=inPort(t)
+                const fDef = getDef(f.type)
                 return (
                   <path key={c.id} d={bezier(p1.x,p1.y,p2.x,p2.y)}
-                    fill="none" stroke={CAT_COLOR[NODE_DEFS[f.type].cat]} strokeWidth={2} opacity={.65}
+                    fill="none" stroke={CAT_COLOR[fDef.cat]} strokeWidth={2} opacity={.65}
                     style={{pointerEvents:'stroke',cursor:'pointer'}}
                     onClick={()=>setConns(cs=>cs.filter(x=>x.id!==c.id))}
                   />
@@ -234,9 +304,10 @@ export default function FlowEditor() {
 
             {/* Nodes */}
             {nodes.map(node=>{
-              const d = NODE_DEFS[node.type]
+              const d = getDef(node.type)
               const color = CAT_COLOR[d.cat]
               const isSel = node.id===sel
+              const label = node.type === 'source_ingest' ? (node.cfg.source_name as string || 'Sorgente') : d.label
               return (
                 <div key={node.id} data-nid={node.id}
                   style={{position:'absolute',left:node.x,top:node.y,width:NW,height:NH,
@@ -246,9 +317,9 @@ export default function FlowEditor() {
                 >
                   <div style={{height:4,borderRadius:'4px 4px 0 0',background:color}}/>
                   <div style={{padding:'7px 10px 5px'}}>
-                    <div style={{fontFamily:'var(--mono)',fontSize:11,fontWeight:500,color:'#dde6f0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{d.label}</div>
+                    <div style={{fontFamily:'var(--mono)',fontSize:11,fontWeight:500,color:'#dde6f0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{label}</div>
                     <div style={{fontSize:10,color:'#3d5268',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginTop:3,fontFamily:'var(--mono)'}}>
-                      {Object.values(node.cfg).slice(0,2).filter(Boolean).join(' · ') || '—'}
+                      {node.type === 'source_ingest' ? 'Ingest sincronizzato' : (Object.values(node.cfg).slice(0,2).filter(Boolean).join(' · ') || '—')}
                     </div>
                   </div>
                   {d.hasIn && (
@@ -275,8 +346,15 @@ export default function FlowEditor() {
             <>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:11}}>
                 <div style={{width:7,height:7,borderRadius:1.5,background:CAT_COLOR[selDef!.cat]}}/>
-                <span style={{fontFamily:'var(--mono)',fontSize:11,color:'#dde6f0',fontWeight:500}}>{selDef!.label}</span>
+                <span style={{fontFamily:'var(--mono)',fontSize:11,color:'#dde6f0',fontWeight:500}}>{selNode.type === 'source_ingest' ? (selNode.cfg.source_name as string) : selDef!.label}</span>
               </div>
+              
+              {selNode.type === 'source_ingest' && (
+                <div style={{fontSize:10,color:'#7a92aa',lineHeight:1.6,marginBottom:12,padding:8,background:'#161b23',borderRadius:3,border:'1px solid #232d3a'}}>
+                  I parametri di questa sorgente sono gestiti nella sezione <strong>Sorgenti</strong>. Qualsiasi modifica apportata lì si rifletterà automaticamente in questo flusso.
+                </div>
+              )}
+
               {selDef!.fields.map(f=>(
                 <div key={f.key} style={{marginBottom:9}}>
                   <label style={{display:'block',fontSize:9,color:'#3d5268',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:3}}>
@@ -292,7 +370,7 @@ export default function FlowEditor() {
                       onChange={e=>setCfg(c=>({...c,[f.key]:Number(e.target.value)}))}
                       style={{width:'100%',accentColor:'#00dfa0',cursor:'pointer'}}/>
                   ) : (
-                    <input type={f.type==='password'?'password':'text'} value={f.type==='password'?'':String(cfg[f.key]??'')}
+                    <input type={f.type==='password'?'password':'text'} value={String(cfg[f.key]??'')}
                       placeholder={f.type==='password'?'••••':''}
                       onChange={e=>setCfg(c=>({...c,[f.key]:e.target.value}))}
                       style={{width:'100%',background:'#161b23',border:'1px solid #2a3240',borderRadius:3,padding:'5px 7px',color:'#dde6f0',fontFamily:'var(--mono)',fontSize:10,outline:'none'}}/>
@@ -307,17 +385,6 @@ export default function FlowEditor() {
           )}
         </div>
       </div>
-
-      {/* SAVE MODAL */}
-      {showSave && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
-          <div style={{background:'#0f1318',border:'1px solid #2e3d50',borderRadius:6,padding:14,width:480,maxHeight:'70vh',display:'flex',flexDirection:'column',gap:8}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:11,color:'#7a92aa'}}>Flow JSON — copia o invia a POST /api/v1/flows</span>
-            <textarea readOnly value={saveJson} style={{flex:1,minHeight:220,background:'#151a22',border:'1px solid #2a3240',borderRadius:3,padding:10,color:'#00dfa0',fontFamily:'var(--mono)',fontSize:10,resize:'none',outline:'none',lineHeight:1.6}}/>
-            <button onClick={()=>setShowSave(false)} style={{alignSelf:'flex-end',background:'#1c2330',border:'1px solid #2a3240',borderRadius:3,padding:'4px 14px',fontFamily:'var(--mono)',fontSize:10,color:'#7a92aa',cursor:'pointer'}}>chiudi</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

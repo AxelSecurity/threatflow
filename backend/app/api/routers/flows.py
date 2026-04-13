@@ -13,6 +13,10 @@ router = APIRouter(prefix="/flows", tags=["Flows"])
 class FlowCreate(BaseModel):
     name: str; definition: dict
 
+class FlowUpdate(BaseModel):
+    name: str | None = None; definition: dict | None = None
+
+
 @router.get("")
 def list_flows(db: Annotated[Session, Depends(get_db)]):
     return db.query(Flow).all()
@@ -21,8 +25,22 @@ def list_flows(db: Annotated[Session, Depends(get_db)]):
 def create_flow(payload: FlowCreate, db: Annotated[Session, Depends(get_db)]):
     try: parse_flow(payload.definition)
     except FlowValidationError as e: raise HTTPException(422, str(e))
-    flow = Flow(name=payload.name, active=False, definition=payload.definition)
+    flow = Flow(name=payload.name, active=True, definition=payload.definition)
     db.add(flow); db.commit(); db.refresh(flow); return flow
+
+@router.patch("/{flow_id}")
+def patch_flow(flow_id: UUID, payload: FlowUpdate, db: Annotated[Session, Depends(get_db)]):
+    flow = db.get(Flow, flow_id)
+    if not flow: raise HTTPException(404)
+    if payload.name is not None:
+        flow.name = payload.name
+    if payload.definition is not None:
+        try: parse_flow(payload.definition)
+        except FlowValidationError as e: raise HTTPException(422, str(e))
+        flow.definition = payload.definition
+        flow.active = True # Ri-attiva in caso di modifiche
+    db.commit(); db.refresh(flow); return flow
+
 
 @router.post("/{flow_id}/activate")
 def activate(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):

@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user, RequireAdmin
 from app.core.security import hash_password, verify_password, create_access_token
-from app.models.user import User, UserRole
+from app.models import User, UserRole
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 

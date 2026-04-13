@@ -1,11 +1,24 @@
-import json, logging, asyncio
+import json, logging, asyncio, uuid
 from app.ingest.registry import get_connector
+from app.db import get_sync_session
+from app.models import Source
 
 logger = logging.getLogger(__name__)
 
 def fetch_from_node(node) -> list:
-    feed_type = "taxii" if node.type == "taxii_in" else "misp" if node.type == "misp_in" else "http"
-    connector = get_connector(feed_type, {**node.config})
+    if node.type == "source_ingest":
+        source_id = node.config.get("source_id")
+        if not source_id: return []
+        with get_sync_session() as session:
+            source = session.get(Source, uuid.UUID(source_id))
+            if not source: return []
+            feed_type = source.feed_type
+            config = {**(source.config or {}), "url": source.url}
+    else:
+        feed_type = "taxii" if node.type == "taxii_in" else "misp" if node.type == "misp_in" else "http"
+        config = {**node.config}
+    
+    connector = get_connector(feed_type, config)
     raw_iocs  = asyncio.run(connector.fetch())
     return [{"value": r.value, "ioc_type": r.ioc_type, "raw_data": r.raw_data, "source_id": None}
             for r in raw_iocs]
@@ -44,7 +57,14 @@ def _persist_iocs(iocs):
 
 def _output_flat(iocs, cfg):
     import os
-    path = cfg.get("path", "/tmp/iocs.txt")
+    path = cfg.get("path", "exports/iocs.txt")
+    # Normalize: if path starts with /exports/, remap to /app/exports/ for shared volume
+    if path.startswith("/exports/"):
+        path = f"/app{path}"
+    # If path is relative, make it relative to /app/
+    if not path.startswith("/"):
+        path = os.path.join("/app", path)
+    
     fmt  = cfg.get("format", "txt")
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w") as f:

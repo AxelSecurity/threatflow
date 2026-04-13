@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 NODE_CATEGORIES = {
+    "source_ingest":"ingest",
     "http_feed":"ingest","taxii_in":"ingest","misp_in":"ingest","manual_in":"ingest",
     "filter_type":"processing","filter_tlp":"processing","filter_score":"processing","dedup":"processing",
     "export_flat":"output","siem_out":"output","firewall_out":"output","taxii_out":"output",
