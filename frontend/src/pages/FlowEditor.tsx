@@ -36,13 +36,6 @@ function outPort(n:NodeData) { return { x:n.x+NW, y:n.y+NH/2 } }
 function inPort(n:NodeData)  { return { x:n.x,    y:n.y+NH/2 } }
 
 export default function FlowEditor() {
-  const { data: flows } = useFlows()
-  const { data: sources } = useSources()
-  const createFlow = useCreateFlow()
-  const updateFlow = useUpdateFlow()
-  const runFlow    = useRunFlow()
-  const { data: flowLogs = [] } = useFlowLogs(id)
-
   const [id, setId]       = useState<string | null>(null)
   const [nodes, setNodes] = useState<NodeData[]>([])
   const [conns, setConns] = useState<ConnData[]>([])
@@ -51,6 +44,13 @@ export default function FlowEditor() {
   const [wire, setWire]   = useState<{fid:string;cx:number;cy:number}|null>(null)
   const [cfg,  setCfg]    = useState<Record<string,string|number>>({})
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  const { data: flows } = useFlows()
+  const { data: sources } = useSources()
+  const createFlow = useCreateFlow()
+  const updateFlow = useUpdateFlow()
+  const runFlow    = useRunFlow()
+  const { data: flowLogs = [] } = useFlowLogs(id)
 
   const nc = useRef(0)
   const cc = useRef(0)
