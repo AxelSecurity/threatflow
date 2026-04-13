@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from celery import shared_task
 from app.db import get_sync_session
-from app.models.ioc import Ioc, IocStatus
+from app.models import Ioc, IocStatus
 
 logger = logging.getLogger(__name__)
 

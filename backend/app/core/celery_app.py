@@ -3,7 +3,12 @@ from celery import Celery
 from celery.schedules import crontab
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-app = Celery("threatflow", broker=REDIS_URL, backend=REDIS_URL)
+app = Celery(
+    "threatflow",
+    broker=REDIS_URL,
+    backend=REDIS_URL,
+    include=["app.tasks.ingest", "app.tasks.aging", "app.executor.tasks"]
+)
 app.conf.task_serializer = "json"
 app.conf.result_serializer = "json"
 app.conf.accept_content = ["json"]

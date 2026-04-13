@@ -1,7 +1,7 @@
 import logging
 from celery import shared_task
 from app.db import get_sync_session
-from app.models.flow import Flow
+from app.models import Flow
 from .parser import parse_flow, FlowValidationError
 from .node_runner import fetch_from_node, run_processing_node, run_output_node
 

@@ -256,16 +256,18 @@ export default function Sources() {
               return (
                 <tr
                   key={src.id}
-                  onClick={() => { if (confirmDelId) setConfirmDelId(null) }}
-                  style={{ borderBottom: '1px solid rgba(24,37,56,.8)', transition: 'background .1s' }}
+                  onClick={() => {
+                    if (confirmDelId) setConfirmDelId(null)
+                    else navigate(`/sources/${src.id}`)
+                  }}
+                  style={{ borderBottom: '1px solid rgba(24,37,56,.8)', transition: 'background .1s', cursor: 'pointer' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'rgba(13,22,32,.8)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   {/* Name — click → detail page */}
                   <td style={{ padding: '10px 14px' }}>
                     <div
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                      onClick={e => { e.stopPropagation(); navigate(`/sources/${src.id}`) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                     >
                       <div style={{ width: 3, height: 20, borderRadius: 2, background: col, flexShrink: 0 }} />
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--cyan)', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: 'rgba(0,212,255,.3)' }}>

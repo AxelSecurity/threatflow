@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from app.core.celery_app import app as celery_app
 from app.db import get_sync_session
-from app.models.source import Source
+from app.models import Source
 from app.ingest.registry import get_connector
 from app.core.redis import get_redis
 from app.processing.pipeline import process_raw_queue
@@ -30,8 +30,9 @@ def _log(source_id: str, level: str, message: str, meta: dict | None = None):
 def _update_last_fetched(source_id: str):
     """Aggiorna last_fetched — chiamato sempre, anche in caso di errore."""
     try:
+        import uuid
         with get_sync_session() as session:
-            src = session.get(Source, source_id)
+            src = session.get(Source, uuid.UUID(source_id))
             if src:
                 src.last_fetched = datetime.now(timezone.utc)
                 session.commit()
@@ -41,9 +42,10 @@ def _update_last_fetched(source_id: str):
 
 @celery_app.task(bind=True, max_retries=3, retry_backoff=True)
 def fetch_feed(self, source_id: str):
+    import uuid
     # 1. Carica la sorgente
     with get_sync_session() as session:
-        source = session.get(Source, source_id)
+        source = session.get(Source, uuid.UUID(source_id))
         if not source or not source.active:
             return
         source_name = source.name
