@@ -3,10 +3,11 @@ import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
-import Dashboard  from './pages/Dashboard'
-import FlowEditor from './pages/FlowEditor'
-import Sources    from './pages/Sources'
-import Login      from './pages/Login'
+import Dashboard    from './pages/Dashboard'
+import FlowEditor   from './pages/FlowEditor'
+import Sources      from './pages/Sources'
+import SourceDetail from './pages/SourceDetail'
+import Login        from './pages/Login'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -56,6 +57,7 @@ function AppRoutes() {
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/" element={<ProtectedRoute><Nav /><Dashboard /></ProtectedRoute>} />
       <Route path="/sources" element={<ProtectedRoute><Nav /><Sources /></ProtectedRoute>} />
+      <Route path="/sources/:id" element={<ProtectedRoute><Nav /><SourceDetail /></ProtectedRoute>} />
       <Route path="/flows" element={<ProtectedRoute><Nav /><FlowEditor /></ProtectedRoute>} />
     </Routes>
   )

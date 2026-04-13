@@ -31,6 +31,7 @@ Pipeline: **ingest → processing → output** — da feed esterni a SIEM, firew
 | Connettore HTTP (feed txt / csv / jsonl) | ✅ |
 | Export flat (plaintext) e JSON | ✅ |
 | Gestione sorgenti: crea, toggle attivo, fetch manuale, elimina | ✅ |
+| Dettaglio sorgente: configurazione, log connettore, IOC recuperati | ✅ |
 | Flow editor visuale con canvas drag-and-drop | ✅ |
 | Parser DAG per flow (rilevamento cicli, validazione nodi) | ✅ |
 | Scadenza automatica IOC (Celery beat) | ✅ |
@@ -100,6 +101,7 @@ threatflow/
 │       │   ├── user.py              # User + ruoli
 │       │   ├── ioc.py               # Ioc, IocSource, IocTag
 │       │   ├── source.py            # Source (feed)
+│       │   ├── source_log.py        # Log esecuzione connettore
 │       │   ├── flow.py              # Flow (definizione JSON)
 │       │   └── tag.py               # Tag
 │       ├── api/
@@ -146,7 +148,8 @@ threatflow/
         └── pages/
             ├── Login.tsx            # Pagina di login
             ├── Dashboard.tsx        # Tabella IOC + filtri + dettaglio
-            ├── Sources.tsx          # Gestione sorgenti
+            ├── Sources.tsx          # Lista sorgenti
+            ├── SourceDetail.tsx     # Dettaglio sorgente (config + log + IOC)
             └── FlowEditor.tsx       # Canvas flow visuale
 ```
 
@@ -261,6 +264,11 @@ Dalla pagina **Sorgenti** clicca "+ nuova sorgente":
 
 Clicca **⟳ fetch** per scaricare subito il feed. Gli IOC appariranno nella Dashboard.
 
+Clicca sul **nome della sorgente** per aprire la pagina di dettaglio con:
+- **Configurazione**: tutti i parametri della sorgente
+- **Log connettore**: cronologia dei fetch con livelli INFO / WARNING / ERROR (aggiornamento automatico ogni 5s)
+- **IOC recuperati**: tabella paginata di tutti gli IOC importati da questa sorgente
+
 ---
 
 ## Sviluppo locale (senza Docker)
@@ -349,9 +357,12 @@ Documentazione interattiva completa: http://localhost:8000/api/docs
 |---|---|---|
 | `GET` | `/sources` | Lista sorgenti |
 | `POST` | `/sources` | Crea sorgente |
-| `POST` | `/sources/{id}/fetch` | Avvia fetch manuale (asincrono) |
+| `GET` | `/sources/{id}` | Dettaglio sorgente (include `ioc_count`, `log_count`) |
+| `POST` | `/sources/{id}/fetch` | Avvia fetch manuale (asincrono, HTTP 202) |
 | `PATCH` | `/sources/{id}/toggle` | Attiva / disattiva sorgente |
 | `DELETE` | `/sources/{id}` | Elimina sorgente |
+| `GET` | `/sources/{id}/logs` | Log esecuzione connettore (param: `limit`) |
+| `GET` | `/sources/{id}/iocs` | IOC importati da questa sorgente (param: `page`, `size`) |
 
 ### Flow
 

@@ -21,6 +21,32 @@ export function useSources() {
   return useQuery({ queryKey: ['sources'], queryFn: api.sources.list })
 }
 
+export function useSource(id: string) {
+  return useQuery({
+    queryKey: ['sources', id],
+    queryFn: () => api.sources.get(id),
+    enabled: !!id,
+  })
+}
+
+export function useSourceLogs(id: string) {
+  return useQuery({
+    queryKey: ['source-logs', id],
+    queryFn: () => api.sources.logs(id),
+    enabled: !!id,
+    refetchInterval: 5000,
+  })
+}
+
+export function useSourceIocs(id: string, page: number, size: number) {
+  return useQuery({
+    queryKey: ['source-iocs', id, page, size],
+    queryFn: () => api.sources.iocs(id, page, size),
+    enabled: !!id,
+    placeholderData: (prev: IocList | undefined) => prev,
+  })
+}
+
 export function useCreateSource() {
   const qc = useQueryClient()
   return useMutation({

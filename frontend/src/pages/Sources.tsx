@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSources, useCreateSource, useToggleSource, useDeleteSource } from '../hooks/useIocs'
 import { api } from '../lib/api'
@@ -48,7 +49,8 @@ const labelStyle: React.CSSProperties = {
 }
 
 export default function Sources() {
-  const qc = useQueryClient()
+  const qc       = useQueryClient()
+  const navigate = useNavigate()
   const { data: sources = [], isLoading } = useSources()
   const createMut  = useCreateSource()
   const toggleMut  = useToggleSource()
@@ -259,11 +261,16 @@ export default function Sources() {
                   onMouseEnter={e => (e.currentTarget.style.background = 'rgba(13,22,32,.8)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
-                  {/* Name */}
+                  {/* Name — click → detail page */}
                   <td style={{ padding: '10px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                      onClick={e => { e.stopPropagation(); navigate(`/sources/${src.id}`) }}
+                    >
                       <div style={{ width: 3, height: 20, borderRadius: 2, background: col, flexShrink: 0 }} />
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--t0)' }}>{src.name}</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--cyan)', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: 'rgba(0,212,255,.3)' }}>
+                        {src.name}
+                      </span>
                     </div>
                   </td>
 

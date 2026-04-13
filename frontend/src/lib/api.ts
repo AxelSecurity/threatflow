@@ -35,6 +35,20 @@ export interface Source {
   active: boolean; fetch_interval: number; last_fetched: string | null; created_at: string
 }
 
+export interface SourceDetail extends Source {
+  config: Record<string, unknown>
+  ioc_count: number
+  log_count: number
+}
+
+export interface SourceLog {
+  id: string
+  level: string
+  message: string
+  meta: Record<string, unknown> | null
+  created_at: string
+}
+
 export interface Flow {
   id: string; name: string; active: boolean; definition: object; created_at: string
 }
@@ -51,10 +65,14 @@ export const api = {
   },
   sources: {
     list:   ()                  => req<Source[]>('/sources'),
+    get:    (id: string)        => req<SourceDetail>(`/sources/${id}`),
     create: (body: object)      => req<Source>('/sources', { method: 'POST', body: JSON.stringify(body) }),
     fetch:  (id: string)        => req<object>(`/sources/${id}/fetch`, { method: 'POST' }),
     toggle: (id: string)        => req<object>(`/sources/${id}/toggle`, { method: 'PATCH' }),
     delete: (id: string)        => req<null>(`/sources/${id}`, { method: 'DELETE' }),
+    logs:   (id: string, limit = 200) => req<SourceLog[]>(`/sources/${id}/logs?limit=${limit}`),
+    iocs:   (id: string, page = 1, size = 50) =>
+      req<IocList>(`/sources/${id}/iocs?page=${page}&size=${size}`),
   },
   flows: {
     list:       ()              => req<Flow[]>('/flows'),
