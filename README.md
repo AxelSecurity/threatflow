@@ -45,46 +45,34 @@ Pipeline: **ingest → processing → output** — da feed esterni a SIEM, firew
 
 ---
 
-## Architettura
+## Architettura Stateful & Real-time
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        FRONTEND (React)                      │
-│   Dashboard · Sorgenti · Flow Editor · Login                 │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTP / JSON  (porta 5173 → proxy → 8000)
-┌──────────────────────────▼──────────────────────────────────┐
-│                     BACKEND (FastAPI)                        │
-│   /auth  /iocs  /sources  /flows  /export                    │
-└──────┬──────────────────────────────────────┬───────────────┘
-       │ SQLAlchemy (async)                    │ Redis (broker)
-┌──────▼──────┐                     ┌─────────▼──────────────┐
-│  PostgreSQL  │                     │   Celery Worker + Beat  │
-│  (schema)    │                     │   fetch_feed()          │
-└─────────────┘                     │   process_raw_queue()   │
-                                    │   expire_stale_iocs()   │
-                                    └────────────────────────┘
-```
+ThreatFlow non è un semplice aggregatore stateless: è un **motore di elaborazione a grafi (Directed Acyclic Graph - DAG)** che mantiene la memoria dello stato di ogni singolo indicatore lungo tutta la pipeline.
 
-**Flusso dati:**
-1. Celery beat schedula `fetch_feed()` per ogni sorgente attiva
-2. Il connettore HTTP scarica il feed e accoda i valori grezzi su Redis
-3. `process_raw_queue()` valida → normalizza → infere il tipo → calcola lo score → upsert su PostgreSQL
-4. Il frontend interroga le API FastAPI per visualizzare e filtrare gli IOC
+### 🧠 Il Motore di Esecuzione (Flow Engine)
+A differenza dei sistemi tradizionali, ogni nodo in ThreatFlow possiede una sua "consapevolezza":
+- **Persistenza tramite `NodeIoc`**: Ogni volta che un indicatore attraversa un nodo, la sua presenza viene registrata nella tabella `NodeIoc` del database PostgreSQL. Questo garantisce che, interrogando un qualsiasi punto della pipeline (anche un filtro intermedio), si ottenga l'esatta fotografia degli IOC attivi in quel momento.
+- **Esecuzione Asincrona**: La pipeline è alimentata da **Celery**, che gestisce l'esecuzione parallela dei nodi. Una modifica al flow o una sorgente aggiornata triggerano istantaneamente una cascata di eventi che aggiorna lo stato lungo tutto il grafico.
+- **Caching Strategico con Redis**: Per permettere alla dashboard di mostrare migliaia di badge numerici senza saturare il database, le statistiche dei nodi sono gestite tramite un layer di cache in Redis con aggiornamento intelligente (TTL 10s), bilanciando precisione e scalabilità.
 
 ---
 
-## Stack tecnologico
+## Funzionalità Avanzate & Ciclo di Vita
 
-| Layer | Tecnologia |
-|---|---|
-| Frontend | React 18, TypeScript, Vite, TanStack React Query, React Router 6 |
-| Backend | FastAPI, Pydantic v2, SQLAlchemy 2.0 (async) |
-| Database | PostgreSQL 16 |
-| Cache / broker | Redis 7 |
-| Task queue | Celery 5 (worker + beat) |
-| Auth | JWT HS256, bcrypt (passlib) |
-| Containerizzazione | Docker, Docker Compose |
+### ⏱️ Dynamic Aging & Grace Period
+Il sistema di Aging è il "cuore stateful" della piattaforma. Gestisce il ciclo di vita degli indicatori in modo dinamico:
+1.  **Fase Active (Verde)**: Finché un indicatore è presente nella sorgente originale (feed), il nodo di Aging lo mantiene in stato "Active". La scadenza viene spostata nel futuro lontano a ogni refresh (Keep-Alive).
+2.  **Fase Aging (Giallo/Arancio)**: Se l'indicatore sparisce dalla sorgente, il nodo di Aging se ne accorge confrontando l'input attuale con la sua memoria storica. Inizia qui il **Grace Period** (countdown configurabile): l'IOC resta nel flusso ma con una data di scadenza reale.
+3.  **Fase Removal**: Allo scadere del countdown, l'indicatore viene rimosso automaticamente dal database del nodo e scompare da tutti i nodi di output successivi.
+
+**Monitoraggio in tempo reale**: Cliccando su un nodo di Aging, avrai accesso a una tabella dedicata che mostra esattamente quali IOC sono "spariti" dalle sorgenti ma sono ancora trattenuti dal sistema, con tanto di countdown al secondo e indicizzazione della sorgente di provenienza.
+
+### 📊 Dashboard Dinamica (Flow Console)
+Il modulo FlowEditor è stato trasformato in una vera e propria console di controllo operativo:
+- **Real-time Badges**: Visualizzazione immediata del carico di ogni nodo (numero di IOC gestiti) tramite badge color smeraldo.
+- **Node Inspector & Custom Labels**: Ogni nodo di processing e output può essere rinominato per adattarsi alla logica di business (es. "Filtro IP Malevoli", "Export per SIEM Milano").
+- **UX Consolidata**: Gestione intelligente degli eventi che permette di trascinare nodi, creare connessioni tra i pin e aprire le configurazioni senza conflitti di interfaccia.
+- **Live Logs Integration**: Visualizzazione granulare dei log tecnici per singolo nodo, facilitando il debugging di filtri complessi direttamente dal canvas.
 
 ---
 
