@@ -77,6 +77,9 @@ def execute_ingest_node(self, node_id: str, flow_id: str, force: bool = False):
 
     try:
         iocs = fetch_from_node(node)
+        # Tagging dell'origine per il tracciamento nell'aging
+        for i in iocs:
+            i["_source_node_id"] = node_id
     except Exception as exc:
         _log(flow_id, "ERROR",
              f"Fetch fallito per nodo {node.type}: {exc}",
@@ -100,7 +103,7 @@ def execute_ingest_node(self, node_id: str, flow_id: str, force: bool = False):
              {"node_id": node_id})
         # Nessun successore: persisti direttamente gli IOC nel DB
         from .node_runner import _persist_iocs
-        _persist_iocs(iocs)
+        _persist_iocs(iocs, flow_id, node_id)
         return
 
     for chunk in _chunk(iocs, 2000):
@@ -127,7 +130,7 @@ def execute_node(self, iocs: list, node_id: str, flow_id: str):
 
     if node.category == "processing":
         try:
-            result = run_processing_node(node, iocs)
+            result = run_processing_node(node, iocs, flow_id)
         except Exception as exc:
             _log(flow_id, "ERROR",
                  f"Errore nodo processing [{node.type}]: {exc}",
@@ -146,7 +149,7 @@ def execute_node(self, iocs: list, node_id: str, flow_id: str):
 
     elif node.category == "output":
         try:
-            run_output_node(node, iocs)
+            run_output_node(node, iocs, flow_id)
             _log(flow_id, "INFO",
                  f"Nodo output [{node.type}]: {len(iocs)} IOC inviati",
                  {"node_id": node_id, "count": len(iocs)})

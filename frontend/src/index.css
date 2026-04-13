@@ -53,3 +53,13 @@ body { background: var(--bg0); color: var(--t0); font-family: system-ui, -apple-
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
 @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,240,144,.5)} 50%{box-shadow:0 0 0 5px rgba(0,240,144,0)} }
 .status-txt { font-family: var(--mono); font-size: 10px; color: var(--green); }
+
+.pulse-dot {
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 223, 160, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 223, 160, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 223, 160, 0); }
+}

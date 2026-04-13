@@ -13,5 +13,5 @@ class Source(UUIDMixin, TimestampMixin, Base):
     fetch_interval: Mapped[int]             = mapped_column(Integer, default=3600)
     config:         Mapped[dict]            = mapped_column(JSONB, default=dict)
     last_fetched:   Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    ioc_sources: Mapped[list["IocSource"]]  = relationship(back_populates="source")
+    ioc_sources: Mapped[list["IocSource"]]  = relationship(back_populates="source", cascade="all, delete-orphan")
     logs: Mapped[list["SourceLog"]]         = relationship(back_populates="source", cascade="all, delete-orphan")

@@ -23,6 +23,6 @@ app.conf.beat_schedule = {
     },
     "schedule-all-flows": {
         "task": "app.executor.tasks.schedule_all_flows",
-        "schedule": 300,
+        "schedule": 60,
     },
 }

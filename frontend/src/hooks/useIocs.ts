@@ -84,6 +84,24 @@ export function useFlowLogs(id: string | null) {
   })
 }
 
+export function useNodeStats(id: string | null) {
+  return useQuery({
+    queryKey: ['flow-node-stats', id],
+    queryFn: () => api.flows.nodeStats(id!),
+    enabled: !!id,
+    refetchInterval: 10000,
+  })
+}
+
+export function useNodeAging(id: string | null, nid: string | null, params: any) {
+  return useQuery({
+    queryKey: ['flow-node-aging', id, nid, params],
+    queryFn: () => api.flows.nodeAging(id!, nid!, params),
+    enabled: !!id && !!nid,
+    refetchInterval: 10000,
+  })
+}
+
 export function useCreateFlow() {
   const qc = useQueryClient()
   return useMutation({

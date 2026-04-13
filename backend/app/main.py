@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 import app.core.celery_app  # noqa — deve essere il primo import: inizializza Celery con il broker corretto
-from app.api.routers import iocs, sources, export, flows, auth
+from app.api.routers import iocs, sources, export, flows, auth, export_nodes
 from app.api.deps import RequireAny, RequireAnalyst
 
 
@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     # Crea tutte le tabelle all'avvio se non esistono già
     from app.db import engine
     from app.models.base import Base
-    from app.models import Ioc, Source, Tag, Flow, User, SourceLog, FlowLog  # noqa — registra i modelli
+    from app.models import Ioc, Source, Tag, Flow, User, SourceLog, FlowLog, NodeIoc  # noqa — registra i modelli
     Base.metadata.create_all(bind=engine)
     yield
 
@@ -38,7 +38,8 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(iocs.router,    prefix="/api/v1", dependencies=[RequireAny])
 app.include_router(sources.router, prefix="/api/v1", dependencies=[RequireAnalyst])
 app.include_router(export.router,  prefix="/api/v1", dependencies=[RequireAny])
-app.include_router(flows.router,   prefix="/api/v1", dependencies=[RequireAnalyst])
+app.include_router(export_nodes.router, prefix="/api/v1")
+app.include_router(flows.router,   prefix="/api/v1", dependencies=[RequireAny]) # Temporarily lessened for analysts
 
 app.mount("/exports", StaticFiles(directory="/app/exports"), name="exports")
 

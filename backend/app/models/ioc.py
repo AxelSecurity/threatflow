@@ -33,7 +33,7 @@ class Ioc(UUIDMixin, TimestampMixin, Base):
 class IocSource(Base):
     __tablename__ = "ioc_source"
     ioc_id:    Mapped[uuid.UUID]        = mapped_column(ForeignKey("ioc.id"), primary_key=True)
-    source_id: Mapped[uuid.UUID]        = mapped_column(ForeignKey("source.id"), primary_key=True)
+    source_id: Mapped[uuid.UUID]        = mapped_column(ForeignKey("source.id", ondelete="CASCADE"), primary_key=True)
     raw_score: Mapped[float | None]     = mapped_column(Float, nullable=True)
     seen_at:   Mapped[datetime]         = mapped_column(DateTime(timezone=True))
     raw_data:  Mapped[dict | None]      = mapped_column(JSONB, nullable=True)

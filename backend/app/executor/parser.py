@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 NODE_CATEGORIES = {
     "source_ingest":"ingest",
     "http_feed":"ingest","taxii_in":"ingest","misp_in":"ingest","manual_in":"ingest",
-    "filter_type":"processing","filter_tlp":"processing","filter_score":"processing","dedup":"processing",
+    "filter_type":"processing","filter_tlp":"processing","filter_score":"processing","dedup":"processing","aging":"processing",
     "export_flat":"output","siem_out":"output","firewall_out":"output","taxii_out":"output",
 }
 
@@ -27,6 +27,10 @@ class ParsedFlow:
 
     def successors(self, node_id: str):
         return self.adj.get(node_id, [])
+
+    def predecessors(self, node_id: str):
+        """Ritorna la lista dei nodi che puntano a questo node_id."""
+        return [nid for nid, succs in self.adj.items() if node_id in succs]
 
 class FlowValidationError(Exception):
     pass

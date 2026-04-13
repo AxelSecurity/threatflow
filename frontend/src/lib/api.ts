@@ -91,6 +91,9 @@ export const api = {
     deactivate: (id: string)    => req<object>(`/flows/${id}/deactivate`, { method: 'POST' }),
     delete:     (id: string)    => req<null>(`/flows/${id}`, { method: 'DELETE' }),
     logs:       (id: string, limit = 100) => req<FlowLog[]>(`/flows/${id}/logs?limit=${limit}`),
+    nodeStats:  (id: string) => req<Record<string, number>>(`/flows/${id}/node-stats`),
+    nodeAging:  (id: string, nid: string, p: any) => 
+      req<any>(`/flows/${id}/nodes/${nid}/aging?${new URLSearchParams(Object.entries(p).filter(([,v])=>v!==undefined).map(([k,v])=>[k,String(v)]))}`),
   },
   export: {
     flat: (params: Record<string,string>) =>

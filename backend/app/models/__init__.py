@@ -5,6 +5,7 @@ from .source_log import SourceLog
 from .flow import Flow
 from .flow_log import FlowLog
 from .tag import Tag, IocTag
+from .node_ioc import NodeIoc
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "FlowLog",
     "Tag",
     "IocTag",
+    "NodeIoc",
 ]

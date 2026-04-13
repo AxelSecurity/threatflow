@@ -36,10 +36,12 @@ Pipeline: **ingest → processing → output** — da feed esterni a SIEM, firew
 | Parser DAG per flow (rilevamento cicli, validazione nodi) | ✅ |
 | Scadenza automatica IOC (Celery beat) | ✅ |
 | Dashboard con ricerca, filtri, score visualization | ✅ |
+| Flow executor (esecuzione Celery DAG stateful) | ✅ |
+| Output node verso SIEM / firewall (syslog CEF/RFC) | ✅ |
+| Monitoraggio real-time con badge e polling | ✅ |
+| Aging dinamico con Grace Period e countdown UI | ✅ |
 | Connettore TAXII | 🔜 |
 | Connettore MISP | 🔜 |
-| Flow executor (esecuzione Celery DAG) | 🔜 |
-| Output verso SIEM / firewall / TAXII | 🔜 |
 
 ---
 
