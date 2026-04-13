@@ -22,7 +22,7 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute=0),
     },
     "schedule-all-flows": {
-        "task": "executor.schedule_all_flows",
+        "task": "app.executor.tasks.schedule_all_flows",
         "schedule": 300,
     },
 }

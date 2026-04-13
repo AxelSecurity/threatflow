@@ -1,6 +1,6 @@
 from sqlalchemy import String, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base, UUIDMixin, TimestampMixin
 
 class Flow(UUIDMixin, TimestampMixin, Base):
@@ -8,3 +8,4 @@ class Flow(UUIDMixin, TimestampMixin, Base):
     name:       Mapped[str]  = mapped_column(String(128), unique=True, nullable=False)
     active:     Mapped[bool] = mapped_column(Boolean, default=False)
     definition: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    logs: Mapped[list["FlowLog"]] = relationship(back_populates="flow", cascade="all, delete-orphan")

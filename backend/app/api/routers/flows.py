@@ -1,74 +1,135 @@
 from uuid import UUID
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.models.flow import Flow
+from app.models.flow_log import FlowLog
 from app.executor.parser import parse_flow, FlowValidationError
-from app.executor.tasks import schedule_all_flows
+from app.executor.tasks import schedule_all_flows, execute_ingest_node
 
 router = APIRouter(prefix="/flows", tags=["Flows"])
 
+
 class FlowCreate(BaseModel):
-    name: str; definition: dict
+    name: str
+    definition: dict
+
 
 class FlowUpdate(BaseModel):
-    name: str | None = None; definition: dict | None = None
+    name: str | None = None
+    definition: dict | None = None
 
 
 @router.get("")
 def list_flows(db: Annotated[Session, Depends(get_db)]):
     return db.query(Flow).all()
 
+
 @router.post("", status_code=201)
 def create_flow(payload: FlowCreate, db: Annotated[Session, Depends(get_db)]):
-    try: parse_flow(payload.definition)
-    except FlowValidationError as e: raise HTTPException(422, str(e))
+    try:
+        parse_flow(payload.definition)
+    except FlowValidationError as e:
+        raise HTTPException(422, str(e))
     flow = Flow(name=payload.name, active=True, definition=payload.definition)
-    db.add(flow); db.commit(); db.refresh(flow); return flow
+    db.add(flow)
+    db.commit()
+    db.refresh(flow)
+    return flow
+
 
 @router.patch("/{flow_id}")
 def patch_flow(flow_id: UUID, payload: FlowUpdate, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)
-    if not flow: raise HTTPException(404)
+    if not flow:
+        raise HTTPException(404)
     if payload.name is not None:
         flow.name = payload.name
     if payload.definition is not None:
-        try: parse_flow(payload.definition)
-        except FlowValidationError as e: raise HTTPException(422, str(e))
+        try:
+            parse_flow(payload.definition)
+        except FlowValidationError as e:
+            raise HTTPException(422, str(e))
         flow.definition = payload.definition
-        flow.active = True # Ri-attiva in caso di modifiche
-    db.commit(); db.refresh(flow); return flow
+        flow.active = True
+    db.commit()
+    db.refresh(flow)
+    return flow
 
 
 @router.post("/{flow_id}/activate")
 def activate(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)
-    if not flow: raise HTTPException(404)
-    flow.active = True; db.commit()
+    if not flow:
+        raise HTTPException(404)
+    flow.active = True
+    db.commit()
     schedule_all_flows.delay()
     return {"detail": "activated"}
+
 
 @router.post("/{flow_id}/deactivate")
 def deactivate(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)
-    if not flow: raise HTTPException(404)
-    flow.active = False; db.commit()
+    if not flow:
+        raise HTTPException(404)
+    flow.active = False
+    db.commit()
     return {"detail": "deactivated"}
+
 
 @router.post("/{flow_id}/run")
 def run_flow(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)
-    if not flow: raise HTTPException(404)
-    from app.executor.tasks import execute_ingest_node, parse_flow
-    parsed = parse_flow(flow.definition)
-    for nid in parsed.ingest_node_ids():
-        execute_ingest_node.delay(nid, str(flow.id))
-    return {"detail": "Flow execution triggered"}
+    if not flow:
+        raise HTTPException(404)
+    try:
+        parsed = parse_flow(flow.definition)
+    except FlowValidationError as e:
+        raise HTTPException(422, str(e))
+    ingest_ids = parsed.ingest_node_ids()
+    if not ingest_ids:
+        raise HTTPException(422, "Il flow non contiene nodi ingest")
+    for nid in ingest_ids:
+        # force=True: la run manuale bypassa il check flow.active
+        execute_ingest_node.delay(nid, str(flow.id), True)
+    return {"detail": "Esecuzione flow avviata", "nodes": len(ingest_ids)}
+
+
+@router.get("/{flow_id}/logs")
+def get_flow_logs(
+    flow_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(100, ge=1, le=500),
+):
+    flow = db.get(Flow, flow_id)
+    if not flow:
+        raise HTTPException(404)
+    logs = (
+        db.query(FlowLog)
+        .filter(FlowLog.flow_id == flow_id)
+        .order_by(FlowLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": str(l.id),
+            "level": l.level,
+            "message": l.message,
+            "meta": l.meta,
+            "created_at": l.created_at,
+        }
+        for l in logs
+    ]
+
 
 @router.delete("/{flow_id}", status_code=204)
 def delete_flow(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)
-    if not flow: raise HTTPException(404)
-    db.delete(flow); db.commit()
+    if not flow:
+        raise HTTPException(404)
+    db.delete(flow)
+    db.commit()

@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     # Crea tutte le tabelle all'avvio se non esistono già
     from app.db import engine
     from app.models.base import Base
-    from app.models import Ioc, Source, Tag, Flow, User, SourceLog  # noqa — registra i modelli
+    from app.models import Ioc, Source, Tag, Flow, User, SourceLog, FlowLog  # noqa — registra i modelli
     Base.metadata.create_all(bind=engine)
     yield
 

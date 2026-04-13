@@ -75,6 +75,15 @@ export function useFlows() {
   return useQuery({ queryKey: ['flows'], queryFn: api.flows.list })
 }
 
+export function useFlowLogs(id: string | null) {
+  return useQuery({
+    queryKey: ['flow-logs', id],
+    queryFn: () => api.flows.logs(id!),
+    enabled: !!id,
+    refetchInterval: 5000,
+  })
+}
+
 export function useCreateFlow() {
   const qc = useQueryClient()
   return useMutation({

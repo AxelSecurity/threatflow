@@ -53,6 +53,14 @@ export interface Flow {
   id: string; name: string; active: boolean; definition: object; created_at: string
 }
 
+export interface FlowLog {
+  id: string
+  level: string
+  message: string
+  meta: Record<string, unknown> | null
+  created_at: string
+}
+
 export const api = {
   iocs: {
     list: (p: Record<string, string | number>) =>
@@ -78,10 +86,11 @@ export const api = {
     list:       ()              => req<Flow[]>('/flows'),
     create:     (body: object)  => req<Flow>('/flows', { method: 'POST', body: JSON.stringify(body) }),
     update:     (id: string, body: object) => req<Flow>(`/flows/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-    run:        (id: string)    => req<object>(`/flows/${id}/run`, { method: 'POST' }),
+    run:        (id: string)    => req<{ detail: string; nodes: number }>(`/flows/${id}/run`, { method: 'POST' }),
     activate:   (id: string)    => req<object>(`/flows/${id}/activate`, { method: 'POST' }),
     deactivate: (id: string)    => req<object>(`/flows/${id}/deactivate`, { method: 'POST' }),
     delete:     (id: string)    => req<null>(`/flows/${id}`, { method: 'DELETE' }),
+    logs:       (id: string, limit = 100) => req<FlowLog[]>(`/flows/${id}/logs?limit=${limit}`),
   },
   export: {
     flat: (params: Record<string,string>) =>

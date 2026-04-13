@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useFlows, useCreateFlow, useUpdateFlow, useSources, useRunFlow } from '../hooks/useIocs'
+import { useFlows, useCreateFlow, useUpdateFlow, useSources, useRunFlow, useFlowLogs } from '../hooks/useIocs'
 
 const NW = 168, NH = 62
 
@@ -41,6 +41,7 @@ export default function FlowEditor() {
   const createFlow = useCreateFlow()
   const updateFlow = useUpdateFlow()
   const runFlow    = useRunFlow()
+  const { data: flowLogs = [] } = useFlowLogs(id)
 
   const [id, setId]       = useState<string | null>(null)
   const [nodes, setNodes] = useState<NodeData[]>([])
@@ -363,9 +364,9 @@ export default function FlowEditor() {
         </div>
 
         {/* CONFIG PANEL */}
-        <div style={{width:214,background:'#0f1318',borderLeft:'1px solid #232d3a',overflowY:'auto',padding:12,flexShrink:0}}>
+        <div style={{width:214,background:'#0f1318',borderLeft:'1px solid #232d3a',overflowY:'auto',padding:12,flexShrink:0,display:'flex',flexDirection:'column',gap:0}}>
           {!selNode ? (
-            <div style={{fontSize:11,color:'#3d5268',textAlign:'center',paddingTop:48,lineHeight:1.8}}>Seleziona un nodo<br/>per configurarlo</div>
+            <div style={{fontSize:11,color:'#3d5268',textAlign:'center',paddingTop:32,lineHeight:1.8}}>Seleziona un nodo<br/>per configurarlo</div>
           ) : (
             <>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:11}}>
@@ -407,6 +408,38 @@ export default function FlowEditor() {
               <button onClick={()=>deleteNode(sel!)} style={{width:'100%',background:'transparent',border:'1px solid #2a3240',borderRadius:3,padding:5,fontFamily:'var(--mono)',fontSize:10,color:'#3d5268',cursor:'pointer',marginTop:5}}>Elimina nodo</button>
             </>
           )}
+
+          {/* ── EXECUTION LOG ── */}
+          <div style={{marginTop:'auto',paddingTop:16,borderTop:'1px solid #232d3a'}}>
+            <div style={{fontSize:9,fontWeight:600,textTransform:'uppercase',letterSpacing:'.1em',color:'#3d5268',marginBottom:8}}>
+              Log esecuzione
+            </div>
+            {flowLogs.length === 0 ? (
+              <div style={{fontSize:10,color:'#3d5268',lineHeight:1.6}}>
+                nessun log —<br/>premi <span style={{color:'#00dfa0'}}>Esegui Ora</span>
+              </div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                {flowLogs.slice(0, 8).map((log: {id:string;level:string;message:string;meta:Record<string,unknown>|null;created_at:string}) => {
+                  const lc = log.level === 'ERROR' ? '#ff5572' : log.level === 'WARNING' ? '#f0a020' : '#00dfa0'
+                  return (
+                    <div key={log.id} style={{borderLeft:`2px solid ${lc}`,paddingLeft:6}}>
+                      <div style={{fontSize:9,color:lc,fontWeight:600,letterSpacing:'.04em'}}>{log.level}</div>
+                      <div style={{fontSize:9,color:'#7a92aa',lineHeight:1.4,wordBreak:'break-word'}}>{log.message}</div>
+                      {log.meta && Object.keys(log.meta).length > 0 && (
+                        <div style={{fontSize:9,color:'#3d5268',marginTop:1}}>{JSON.stringify(log.meta)}</div>
+                      )}
+                    </div>
+                  )
+                })}
+                {flowLogs.length > 8 && (
+                  <div style={{fontSize:9,color:'#3d5268',textAlign:'center',marginTop:2}}>
+                    +{flowLogs.length - 8} altri log
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
