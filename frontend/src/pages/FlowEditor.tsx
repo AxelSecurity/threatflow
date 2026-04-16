@@ -73,6 +73,7 @@ export default function FlowEditor() {
   const cc = useRef(0)
   const cvRef = useRef<HTMLDivElement>(null)
   const isInitialLoad = useRef(true)
+  const dragMoved = useRef(false)
 
   // Initialization: load or create flow
   useEffect(() => {
@@ -170,6 +171,7 @@ export default function FlowEditor() {
   const startDrag = (id:string, e:React.MouseEvent) => {
     const n = byId(id)!
     const p = cvPos(e.clientX, e.clientY)
+    dragMoved.current = false
     setDrag({ id, sx:p.x, sy:p.y, ox:n.x, oy:n.y })
   }
 
@@ -177,6 +179,9 @@ export default function FlowEditor() {
     const onMove = (e:MouseEvent) => {
       if (drag) {
         const p = cvPos(e.clientX, e.clientY)
+        if (Math.abs(p.x - drag.sx) > 3 || Math.abs(p.y - drag.sy) > 3) {
+          dragMoved.current = true
+        }
         setNodes(ns=>ns.map(n=>n.id===drag.id ? {...n, x:Math.max(0,drag.ox+(p.x-drag.sx)), y:Math.max(0,drag.oy+(p.y-drag.sy))} : n))
       }
       if (wire) {
@@ -373,6 +378,10 @@ export default function FlowEditor() {
                   onClick={(e)=>{ 
                     const target = e.target as HTMLElement;
                     if (target.closest('[data-port]')) return; // Ignora se clicchi sul pallino
+                    if (dragMoved.current) {
+                      dragMoved.current = false;
+                      return; // Ignora se il mouse è stato trascinato
+                    }
                     e.stopPropagation(); 
                     setSel(node.id); 
                     setModalOpen(true); 

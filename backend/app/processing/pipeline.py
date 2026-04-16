@@ -70,6 +70,22 @@ def _process_one(payload: dict):
                 session.flush()
 
         count = session.query(IocSource).filter(IocSource.ioc_id == ioc.id).count()
-        ioc.score = compute_score(ScoreContext(
+        # Calcolo score base (poteva venire sovrascritto se manuale)
+        base_score = compute_score(ScoreContext(
             source_count=max(count, 1), feed_weight=1.0, ioc_type=ioc_type))
+        
+        # Override manuale se presente
+        if raw_data:
+            m_score = raw_data.get("manual_score")
+            m_tlp   = raw_data.get("manual_tlp")
+            if m_score is not None:
+                ioc.score = float(m_score)
+            else:
+                ioc.score = base_score
+                
+            if m_tlp is not None:
+                ioc.tlp = m_tlp
+        else:
+            ioc.score = base_score
+
         session.commit()

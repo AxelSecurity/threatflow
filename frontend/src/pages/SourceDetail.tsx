@@ -63,6 +63,9 @@ export default function SourceDetail() {
   const { data: iocData }        = useSourceIocs(id, iocPage, 50)
   const toggleMut                = useToggleSource()
 
+  const [newIoc, setNewIoc] = useState({ value: '', ioc_type: '', tlp: 'amber', score: 50 })
+  const [isSaving, setIsSaving] = useState(false)
+
   if (isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 48px)', fontFamily: 'var(--mono)', color: 'var(--t3)' }}>
@@ -96,6 +99,31 @@ export default function SourceDetail() {
     } finally {
       setFetching(false)
     }
+  }
+
+  async function updateManualIndicators(indicators: any[]) {
+    if (!src) return
+    setIsSaving(true)
+    try {
+      await api.sources.updateConfig(id, { ...(src.config as any), indicators })
+      qc.invalidateQueries({ queryKey: ['sources', id] })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  function addManualIndicator() {
+    if (!src || !newIoc.value.trim()) return
+    const indicators = [...((src.config as any).indicators || []), { ...newIoc, value: newIoc.value.trim() }]
+    updateManualIndicators(indicators)
+    setNewIoc({ value: '', ioc_type: '', tlp: 'amber', score: 50 })
+  }
+
+  function removeManualIndicator(index: number) {
+    if (!src) return
+    const indicators = [...((src.config as any).indicators || [])]
+    indicators.splice(index, 1)
+    updateManualIndicators(indicators)
   }
 
   const tabBtn = (t: Tab, label: string, count?: number) => (
@@ -257,8 +285,121 @@ export default function SourceDetail() {
               ))}
             </div>
 
-            {/* Config JSON extra */}
-            {Object.keys(src.config).length > 0 && (
+            {/* Manual Indicators Manager */}
+            {src.feed_type === 'manual_in' && (
+              <div style={{ marginTop: 32, paddingTop: 32, borderTop: '1px solid var(--bd1)' }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700, color: 'var(--t0)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 16 }}>
+                  Indicatori Manuali
+                </div>
+
+                {/* Form di aggiunta */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 80px auto', gap: 10, alignItems: 'end', background: 'rgba(255,170,32,.03)', padding: 14, borderRadius: 6, border: '1px solid rgba(255,170,32,.1)', marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 9, color: 'var(--t2)', textTransform: 'uppercase', marginBottom: 4 }}>Valore</div>
+                    <input 
+                      value={newIoc.value} 
+                      onChange={e => setNewIoc(v => ({...v, value: e.target.value}))}
+                      placeholder="es. 1.2.3.4"
+                      style={{ width: '100%', background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 3, padding: '7px 10px', color: 'var(--t0)', fontSize: 11 }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, color: 'var(--t2)', textTransform: 'uppercase', marginBottom: 4 }}>Tipo (opz)</div>
+                    <select 
+                      value={newIoc.ioc_type} 
+                      onChange={e => setNewIoc(v => ({...v, ioc_type: e.target.value}))}
+                      style={{ width: '100%', background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 3, padding: '7px 10px', color: 'var(--t0)', fontSize: 11 }}
+                    >
+                      <option value="">Auto</option>
+                      <option value="ipv4">IPv4</option>
+                      <option value="ipv6">IPv6</option>
+                      <option value="domain">Domain</option>
+                      <option value="url">URL</option>
+                      <option value="md5">MD5</option>
+                      <option value="sha1">SHA1</option>
+                      <option value="sha256">SHA256</option>
+                      <option value="sha512">SHA512</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, color: 'var(--t2)', textTransform: 'uppercase', marginBottom: 4 }}>TLP</div>
+                    <select 
+                      value={newIoc.tlp} 
+                      onChange={e => setNewIoc(v => ({...v, tlp: e.target.value}))}
+                      style={{ width: '100%', background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 3, padding: '7px 10px', color: 'var(--t0)', fontSize: 11 }}
+                    >
+                      <option value="white">WHITE</option>
+                      <option value="green">GREEN</option>
+                      <option value="amber">AMBER</option>
+                      <option value="red">RED</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, color: 'var(--t2)', textTransform: 'uppercase', marginBottom: 4 }}>Score</div>
+                    <input 
+                      type="number" min={0} max={100}
+                      value={newIoc.score} 
+                      onChange={e => setNewIoc(v => ({...v, score: Number(e.target.value)}))}
+                      style={{ width: '100%', background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 3, padding: '7px 10px', color: 'var(--t0)', fontSize: 11 }}
+                    />
+                  </div>
+                  <button 
+                    onClick={addManualIndicator}
+                    disabled={isSaving || !newIoc.value.trim()}
+                    style={{ background: 'var(--amber)', border: 'none', borderRadius: 3, padding: '8px 16px', color: '#000', fontWeight: 600, fontSize: 10, cursor: 'pointer', opacity: (isSaving || !newIoc.value.trim()) ? 0.5 : 1 }}
+                  >
+                    AGGIUNGI
+                  </button>
+                </div>
+
+                {/* Lista attuale */}
+                <div style={{ border: '1px solid var(--bd1)', borderRadius: 6, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--bd1)' }}>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, color: 'var(--t2)', textTransform: 'uppercase' }}>Valore</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, color: 'var(--t2)', textTransform: 'uppercase' }}>Metadati</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: 9, color: 'var(--t2)', textTransform: 'uppercase' }}>Azioni</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(!(src.config as any).indicators || (src.config as any).indicators.length === 0) ? (
+                        <tr>
+                          <td colSpan={3} style={{ padding: 20, textAlign: 'center', fontSize: 10, color: 'var(--t3)', fontFamily: 'var(--mono)' }}>Nessun indicatore manuale</td>
+                        </tr>
+                      ) : (src.config as any).indicators.map((ioc: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--bd1)' }}>
+                          <td style={{ padding: '8px 12px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--t1)' }}>{ioc.value}</td>
+                          <td style={{ padding: '8px 12px' }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <span style={{ fontSize: 9, background: 'var(--bg3)', padding: '2px 6px', borderRadius: 2, color: 'var(--t2)' }}>{ioc.ioc_type || 'auto'}</span>
+                              <span style={{ fontSize: 9, background: 'var(--bg3)', padding: '2px 6px', borderRadius: 2, color: ioc.tlp === 'red' ? 'var(--red)' : ioc.tlp === 'amber' ? 'var(--amber)' : 'var(--green)' }}>TLP:{ioc.tlp.toUpperCase()}</span>
+                              <span style={{ fontSize: 9, background: 'var(--bg3)', padding: '2px 6px', borderRadius: 2, color: 'var(--cyan)' }}>Score:{ioc.score}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                            <button 
+                              onClick={() => removeManualIndicator(idx)}
+                              disabled={isSaving}
+                              style={{ background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 2, padding: '2px 8px', fontSize: 9, cursor: 'pointer' }}
+                            >
+                              rimuovi
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ marginTop: 12, fontSize: 10, color: 'var(--t3)', fontStyle: 'italic' }}>
+                  Nota: Dopo aver aggiunto o rimosso indicatori, clicca su "Fetch" in alto per aggiornare gli IOC attivi.
+                </div>
+              </div>
+            )}
+
+            {/* Config JSON extra (solo se non manuale o per debug) */}
+            {(src.feed_type !== 'manual_in' && Object.keys(src.config).length > 0) && (
               <div style={{ marginTop: 24 }}>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
                   config avanzata

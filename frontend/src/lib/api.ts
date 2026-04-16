@@ -77,6 +77,7 @@ export const api = {
     create: (body: object)      => req<Source>('/sources', { method: 'POST', body: JSON.stringify(body) }),
     fetch:  (id: string)        => req<object>(`/sources/${id}/fetch`, { method: 'POST' }),
     toggle: (id: string)        => req<object>(`/sources/${id}/toggle`, { method: 'PATCH' }),
+    updateConfig: (id: string, config: any) => req<SourceDetail>(`/sources/${id}/config`, { method: 'PATCH', body: JSON.stringify(config) }),
     delete: (id: string)        => req<null>(`/sources/${id}`, { method: 'DELETE' }),
     logs:   (id: string, limit = 200) => req<SourceLog[]>(`/sources/${id}/logs?limit=${limit}`),
     iocs:   (id: string, page = 1, size = 50) =>

@@ -156,47 +156,51 @@ export default function Sources() {
       {showForm && (
         <div style={{ background: 'var(--bg1)', borderBottom: '2px solid var(--bd2)', padding: '16px 20px' }}>
           <form onSubmit={handleCreate}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 1fr 110px auto', gap: 12, alignItems: 'end' }}>
-              <div>
-                <label style={labelStyle}>Nome *</label>
-                <input
-                  value={form.name}
-                  onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setNameError('') }}
-                  placeholder="es. Feodo Tracker"
-                  style={{ ...inputStyle, borderColor: nameError ? 'var(--red)' : 'var(--bd2)' }}
-                  autoFocus
-                />
-                {nameError && <div style={{ fontSize: 9, color: 'var(--red)', marginTop: 3 }}>{nameError}</div>}
-              </div>
-              <div>
-                <label style={labelStyle}>Tipo *</label>
-                <select
-                  value={form.feed_type}
-                  onChange={e => setForm(f => ({ ...f, feed_type: e.target.value }))}
-                  style={{ ...inputStyle }}
-                >
-                  {FEED_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>URL feed</label>
-                <input
-                  value={form.url}
-                  onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
-                  placeholder="https://..."
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Intervallo (s)</label>
-                <input
-                  type="number"
-                  min={60}
-                  value={form.fetch_interval}
-                  onChange={e => setForm(f => ({ ...f, fetch_interval: Math.max(60, Number(e.target.value)) }))}
-                  style={inputStyle}
-                />
-              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: form.feed_type === 'manual_in' ? '1fr 150px auto' : '1fr 150px 1fr 110px auto', gap: 12, alignItems: 'end' }}>
+                <div>
+                  <label style={labelStyle}>Nome *</label>
+                  <input
+                    value={form.name}
+                    onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setNameError('') }}
+                    placeholder="es. Feodo Tracker"
+                    style={{ ...inputStyle, borderColor: nameError ? 'var(--red)' : 'var(--bd2)' }}
+                    autoFocus
+                  />
+                  {nameError && <div style={{ fontSize: 9, color: 'var(--red)', marginTop: 3 }}>{nameError}</div>}
+                </div>
+                <div>
+                  <label style={labelStyle}>Tipo *</label>
+                  <select
+                    value={form.feed_type}
+                    onChange={e => setForm(f => ({ ...f, feed_type: e.target.value }))}
+                    style={{ ...inputStyle }}
+                  >
+                    {FEED_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                {form.feed_type !== 'manual_in' && (
+                  <>
+                    <div>
+                      <label style={labelStyle}>URL feed</label>
+                      <input
+                        value={form.url}
+                        onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                        placeholder="https://..."
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Intervallo (s)</label>
+                      <input
+                        type="number"
+                        min={60}
+                        value={form.fetch_interval}
+                        onChange={e => setForm(f => ({ ...f, fetch_interval: Math.max(60, Number(e.target.value)) }))}
+                        style={inputStyle}
+                      />
+                    </div>
+                  </>
+                )}
               <button
                 type="submit"
                 disabled={createMut.isPending}

@@ -8,7 +8,7 @@ from .base import Base, UUIDMixin, TimestampMixin
 
 class IocType(str, Enum):
     IPV4="ipv4"; IPV6="ipv6"; DOMAIN="domain"; URL="url"
-    MD5="md5"; SHA1="sha1"; SHA256="sha256"; EMAIL="email"
+    MD5="md5"; SHA1="sha1"; SHA256="sha256"; EMAIL="email"; SHA512="sha512"
 
 class TLP(str, Enum):
     WHITE="white"; GREEN="green"; AMBER="amber"; RED="red"
@@ -32,7 +32,7 @@ class Ioc(UUIDMixin, TimestampMixin, Base):
 
 class IocSource(Base):
     __tablename__ = "ioc_source"
-    ioc_id:    Mapped[uuid.UUID]        = mapped_column(ForeignKey("ioc.id"), primary_key=True)
+    ioc_id:    Mapped[uuid.UUID]        = mapped_column(ForeignKey("ioc.id", ondelete="CASCADE"), primary_key=True)
     source_id: Mapped[uuid.UUID]        = mapped_column(ForeignKey("source.id", ondelete="CASCADE"), primary_key=True)
     raw_score: Mapped[float | None]     = mapped_column(Float, nullable=True)
     seen_at:   Mapped[datetime]         = mapped_column(DateTime(timezone=True))

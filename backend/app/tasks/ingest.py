@@ -91,6 +91,46 @@ def fetch_feed(self, source_id: str):
         _log(source_id, "ERROR", f"Errore pipeline: {exc}")
         logger.error(f"[{source_name}] Pipeline error: {exc}")
 
+    # 4b. Sincronizzazione per Ingest Manuale (Cleanup rimosse)
+    if feed_type == "manual_in":
+        try:
+            from sqlalchemy import delete, select
+            from app.models.ioc import Ioc, IocSource
+            new_values = [ioc.value for ioc in raw_iocs]
+            with get_sync_session() as session:
+                # 1. Trova ID degli IOC validi nel batch corrente
+                valid_ids_stmt = select(Ioc.id).where(Ioc.value.in_(new_values))
+                
+                # 2. Elimina legami IocSource obsoleti
+                del_links_stmt = (
+                    delete(IocSource)
+                    .where(IocSource.source_id == uuid.UUID(source_id))
+                    .where(~IocSource.ioc_id.in_(valid_ids_stmt))
+                )
+                session.execute(del_links_stmt)
+                
+                # 3. Elimina IOC orfani immediatamente
+                from app.models.node_ioc import NodeIoc
+                from app.models.tag import IocTag
+                
+                # a) Pulisce le dipendenze in node_ioc (se il database non supporta cascade o se non è configurato su postgres)
+                del_nodeioc_stmt = delete(NodeIoc).where(~NodeIoc.ioc_id.in_(select(IocSource.ioc_id)))
+                session.execute(del_nodeioc_stmt)
+                
+                # b) Pulisce le dipendenze in ioc_tag
+                del_ioctag_stmt = delete(IocTag).where(~IocTag.ioc_id.in_(select(IocSource.ioc_id)))
+                session.execute(del_ioctag_stmt)
+
+                # c) Pulisce gli IOC orfani veri e propri
+                del_orphans_stmt = delete(Ioc).where(~Ioc.id.in_(select(IocSource.ioc_id)))
+                session.execute(del_orphans_stmt)
+                
+                session.commit()
+            _log(source_id, "INFO", "Sincronizzazione manuale completata: rimosse voci non più presenti")
+        except Exception as e:
+            _log(source_id, "ERROR", f"Errore sincronizzazione manuale: {e}")
+            logger.error(f"[{source_name}] Sync error: {e}")
+
     # 5. Aggiorna sempre last_fetched
     _update_last_fetched(source_id)
     logger.info(f"[{source_name}] Fetch completato: {len(raw_iocs)} IOC")

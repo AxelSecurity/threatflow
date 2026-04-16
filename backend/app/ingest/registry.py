@@ -1,10 +1,12 @@
 from .http import HttpConnector
 from .taxii import TaxiiConnector
+from .manual import ManualConnector
 
 REGISTRY = {
     # nomi usati dal frontend
     "http_feed": HttpConnector,
     "taxii_in":  TaxiiConnector,
+    "manual_in": ManualConnector,
     # alias legacy
     "http":  HttpConnector,
     "csv":   HttpConnector,

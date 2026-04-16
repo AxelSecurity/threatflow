@@ -9,7 +9,7 @@ class NodeIoc(Base):
     
     flow_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("flow.id"), primary_key=True)
     node_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    ioc_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ioc.id"), primary_key=True)
+    ioc_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ioc.id", ondelete="CASCADE"), primary_key=True)
     
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     source_node_id: Mapped[str] = mapped_column(String(64), nullable=True)

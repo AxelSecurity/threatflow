@@ -69,6 +69,17 @@ def toggle_source(source_id: UUID, db: Annotated[Session, Depends(get_db)]):
     return {"active": src.active}
 
 
+@router.patch("/{source_id}/config")
+def update_source_config(source_id: UUID, payload: dict, db: Annotated[Session, Depends(get_db)]):
+    src = db.get(Source, source_id)
+    if not src:
+        raise HTTPException(404)
+    src.config = payload
+    db.add(src)
+    db.commit()
+    return {"config": src.config}
+
+
 @router.delete("/{source_id}", status_code=204)
 def delete_source(source_id: UUID, db: Annotated[Session, Depends(get_db)]):
     src = db.get(Source, source_id)
