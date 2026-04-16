@@ -55,9 +55,10 @@ export default function FlowEditor() {
   const [drag, setDrag]   = useState<{id:string;sx:number;sy:number;ox:number;oy:number}|null>(null)
   const [wire, setWire]   = useState<{fid:string;cx:number;cy:number}|null>(null)
   const [cfg,  setCfg]    = useState<Record<string,any>>({})
+  const [localLabel, setLocalLabel] = useState('')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [agingPage, setAgingPage] = useState(1)
   const [agingSearch, setAgingSearch] = useState('')
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   const { data: flows } = useFlows()
   const { data: sources } = useSources()
@@ -146,13 +147,18 @@ export default function FlowEditor() {
   useEffect(()=>{
     if (sel) {
       const n = byId(sel)
-      if (n) setCfg({...n.cfg})
+      if (n) {
+        setCfg({...n.cfg})
+        setLocalLabel(n.label || '')
+      }
     }
   },[sel])
 
+  const isLabelDuplicate = nodes.some(n => n.id !== sel && n.label && n.label.trim().toLowerCase() === localLabel.trim().toLowerCase())
+
   const applyCfg = () => {
-    if (!sel) return
-    setNodes(ns => ns.map(n => n.id===sel ? {...n,cfg:{...cfg}} : n))
+    if (!sel || isLabelDuplicate) return
+    setNodes(ns => ns.map(n => n.id===sel ? {...n, label: localLabel.trim(), cfg:{...cfg}} : n))
   }
 
   const deleteNode = (id:string) => {
@@ -443,14 +449,23 @@ export default function FlowEditor() {
                 
                 {selDef!.cat !== 'i' && (
                   <div style={{marginBottom:14}}>
-                    <label style={{display:'block', fontSize:10, color:'#4a5c70', marginBottom:5}}>Nome Nodo</label>
-                    <input type="text" value={selNode.label || ''} 
-                      onChange={e => {
-                        const newLabel = e.target.value;
-                        setNodes(ns => ns.map(n => n.id === selNode.id ? {...n, label: newLabel} : n));
-                      }}
+                    <label style={{display:'block', fontSize:10, color:isLabelDuplicate ? '#ff5572' : '#4a5c70', marginBottom:5}}>
+                      Nome Nodo {isLabelDuplicate && '(Già in uso)'}
+                    </label>
+                    <input type="text" value={localLabel} 
+                      onChange={e => setLocalLabel(e.target.value)}
                       placeholder={selDef!.label}
-                      style={{width:'100%', background:'#1c2330', border:'1px solid #2a3240', borderRadius:4, padding:'8px 10px', color:'#dde6f0', fontFamily:'var(--mono)', fontSize:12, outline:'none'}}/>
+                      style={{
+                        width:'100%', 
+                        background:'#1c2330', 
+                        border:`1px solid ${isLabelDuplicate ? '#ff5572' : '#2a3240'}`, 
+                        borderRadius:4, 
+                        padding:'8px 10px', 
+                        color:isLabelDuplicate ? '#ff5572' : '#dde6f0', 
+                        fontFamily:'var(--mono)', 
+                        fontSize:12, 
+                        outline:'none'
+                      }}/>
                   </div>
                 )}
 
@@ -546,23 +561,50 @@ export default function FlowEditor() {
                   </div>
                 ))}
                 
-                {selDef!.fields.length > 0 && (
-                  <button onClick={applyCfg} style={{width:'100%', background:'#00dfa0', border:'none', borderRadius:4, padding:'10px', fontFamily:'var(--mono)', fontSize:11, fontWeight:600, color:'#080b0f', cursor:'pointer', marginTop:10}}>SALVA CONFIGURAZIONE</button>
-                )}
+                {selDef!.fields.length > 0 || selDef!.cat !== 'i' ? (
+                  <button 
+                    onClick={applyCfg} 
+                    disabled={isLabelDuplicate}
+                    style={{
+                      width:'100%', 
+                      background: isLabelDuplicate ? '#232d3a' : '#00dfa0', 
+                      border:'none', 
+                      borderRadius:4, 
+                      padding:'10px', 
+                      fontFamily:'var(--mono)', 
+                      fontSize:11, 
+                      fontWeight:600, 
+                      color: isLabelDuplicate ? '#4a5c70' : '#080b0f', 
+                      cursor: isLabelDuplicate ? 'default' : 'pointer', 
+                      marginTop:10
+                    }}
+                  >
+                    SALVA CONFIGURAZIONE
+                  </button>
+                ) : null}
 
                 {/* EXPORT URL FOR OUTPUT NODES ONLY */}
                 {selDef!.cat === 'o' && id && (
                   <div style={{marginTop:24, paddingTop:16, borderTop:'1px dashed #232d3a'}}>
                     <div style={{fontSize:9, fontWeight:600, color:'#f0a020', textTransform:'uppercase', marginBottom:8}}>URL di Esportazione Dinamica</div>
-                    <div style={{background:'#080b0f', padding:8, borderRadius:4, fontSize:9, color:'#7a92aa', wordBreak:'break-all', fontFamily:'var(--mono)', border:'1px solid #161b23'}}>
-                      {`${window.location.origin}/api/v1/export/node/${id}/${selNode.id}.txt`}
-                    </div>
-                    <button 
-                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/v1/export/node/${id}/${selNode.id}.txt`)}
-                      style={{marginTop:8, width:'100%', background:'transparent', border:'1px solid #f0a020', color:'#f0a020', borderRadius:4, padding:5, fontSize:9, cursor:'pointer'}}
-                    >
-                      COPIA URL
-                    </button>
+                    {(() => {
+                      const ext = selNode.cfg.format || 'txt';
+                      const identifier = selNode.label || selNode.id;
+                      const url = `${window.location.origin}/api/v1/export/node/${id}/${identifier}.${ext}`;
+                      return (
+                        <>
+                          <div style={{background:'#080b0f', padding:8, borderRadius:4, fontSize:9, color:'#7a92aa', wordBreak:'break-all', fontFamily:'var(--mono)', border:'1px solid #161b23'}}>
+                            {url}
+                          </div>
+                          <button 
+                            onClick={() => navigator.clipboard.writeText(url)}
+                            style={{marginTop:8, width:'100%', background:'transparent', border:'1px solid #f0a020', color:'#f0a020', borderRadius:4, padding:5, fontSize:9, cursor:'pointer'}}
+                          >
+                            COPIA URL
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

@@ -12,6 +12,7 @@ class FlowNode:
     id: str
     type: str
     config: dict
+    label: str | None = None
 
     @property
     def category(self) -> str:
@@ -21,6 +22,19 @@ class FlowNode:
 class ParsedFlow:
     nodes: dict
     adj: dict
+
+    def find_node(self, identifier: str) -> FlowNode | None:
+        """Cerca un nodo per ID o per Label (case insensitive)."""
+        # 1. Ricerca per ID esatto
+        if identifier in self.nodes:
+            return self.nodes[identifier]
+        
+        # 2. Ricerca per Label
+        for node in self.nodes.values():
+            if node.label and node.label.lower() == identifier.lower():
+                return node
+        
+        return None
 
     def ingest_node_ids(self):
         return [id for id, n in self.nodes.items() if n.category == "ingest"]
@@ -36,7 +50,7 @@ class FlowValidationError(Exception):
     pass
 
 def parse_flow(definition: dict) -> ParsedFlow:
-    nodes = {n["id"]: FlowNode(n["id"], n["type"], n.get("config", {}))
+    nodes = {n["id"]: FlowNode(n["id"], n["type"], n.get("config", {}), n.get("label"))
              for n in definition.get("nodes", [])}
     adj = {id: [] for id in nodes}
     for c in definition.get("connections", []):
