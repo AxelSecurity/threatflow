@@ -86,15 +86,16 @@ def execute_ingest_node(self, node_id: str, flow_id: str, force: bool = False):
              {"node_id": node_id})
         raise self.retry(exc=exc)
 
-    if not iocs:
-        _log(flow_id, "WARNING",
-             f"Nessun IOC recuperato dal nodo [{node.type}]",
-             {"node_id": node_id})
-        return
-
     _log(flow_id, "INFO",
          f"Nodo [{node.type}]: {len(iocs)} IOC recuperati",
          {"node_id": node_id, "count": len(iocs)})
+
+    if not iocs:
+        # Anche con lista vuota dobbiamo propagare ai successori:
+        # il nodo aging deve poter avere accesso alla sua lista storica
+        # (su DB) per avviare il countdown sugli IOC non più arrivati.
+        # Non interrompiamo il flow qui.
+        pass
 
     successors = parsed.successors(node_id)
     if not successors:

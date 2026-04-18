@@ -91,45 +91,52 @@ def fetch_feed(self, source_id: str):
         _log(source_id, "ERROR", f"Errore pipeline: {exc}")
         logger.error(f"[{source_name}] Pipeline error: {exc}")
 
-    # 4b. Sincronizzazione per Ingest Manuale (Cleanup rimosse)
-    if feed_type == "manual_in":
-        try:
-            from sqlalchemy import delete, select
-            from app.models.ioc import Ioc, IocSource
-            new_values = [ioc.value for ioc in raw_iocs]
-            with get_sync_session() as session:
-                # 1. Trova ID degli IOC validi nel batch corrente
-                valid_ids_stmt = select(Ioc.id).where(Ioc.value.in_(new_values))
-                
-                # 2. Elimina legami IocSource obsoleti
-                del_links_stmt = (
-                    delete(IocSource)
-                    .where(IocSource.source_id == uuid.UUID(source_id))
-                    .where(~IocSource.ioc_id.in_(valid_ids_stmt))
-                )
-                session.execute(del_links_stmt)
-                
-                # 3. Elimina IOC orfani immediatamente
+    # 4b. Sincronizzazione per tutti gli Ingest (Cleanup rimosse)
+    try:
+        from sqlalchemy import delete, select
+        from app.models.ioc import Ioc, IocSource
+        new_values = [ioc.value for ioc in raw_iocs]
+        with get_sync_session() as session:
+            # 1. Trova ID degli IOC validi nel batch corrente
+            valid_ids_stmt = select(Ioc.id).where(Ioc.value.in_(new_values))
+            
+            # 2. Elimina legami IocSource obsoleti e recupera quali sono stati tolti
+            del_links_stmt = (
+                delete(IocSource)
+                .where(IocSource.source_id == uuid.UUID(source_id))
+                .where(~IocSource.ioc_id.in_(valid_ids_stmt))
+                .returning(IocSource.ioc_id)
+            )
+            deleted_ioc_ids_tuples = session.execute(del_links_stmt).fetchall()
+            deleted_ioc_ids = [r[0] for r in deleted_ioc_ids_tuples]
+            
+            # 3. Elimina IOC orfani immediatamente (SOLO per manual_in)
+            if feed_type == "manual_in" and deleted_ioc_ids:
                 from app.models.node_ioc import NodeIoc
                 from app.models.tag import IocTag
                 
-                # a) Pulisce le dipendenze in node_ioc (se il database non supporta cascade o se non è configurato su postgres)
-                del_nodeioc_stmt = delete(NodeIoc).where(~NodeIoc.ioc_id.in_(select(IocSource.ioc_id)))
-                session.execute(del_nodeioc_stmt)
+                # Identifica quali degli indicatori rimossi sono diventati dei veri orfani
+                true_orphans_stmt = select(Ioc.id).where(Ioc.id.in_(deleted_ioc_ids)).where(~Ioc.id.in_(select(IocSource.ioc_id)))
+                true_orphans = [r[0] for r in session.execute(true_orphans_stmt).fetchall()]
                 
-                # b) Pulisce le dipendenze in ioc_tag
-                del_ioctag_stmt = delete(IocTag).where(~IocTag.ioc_id.in_(select(IocSource.ioc_id)))
-                session.execute(del_ioctag_stmt)
+                if true_orphans:
+                    # a) Pulisce le dipendenze in node_ioc (forzando cancellazione per output nodes)
+                    del_nodeioc_stmt = delete(NodeIoc).where(NodeIoc.ioc_id.in_(true_orphans))
+                    session.execute(del_nodeioc_stmt)
+                    
+                    # b) Pulisce le dipendenze in ioc_tag
+                    del_ioctag_stmt = delete(IocTag).where(IocTag.ioc_id.in_(true_orphans))
+                    session.execute(del_ioctag_stmt)
 
-                # c) Pulisce gli IOC orfani veri e propri
-                del_orphans_stmt = delete(Ioc).where(~Ioc.id.in_(select(IocSource.ioc_id)))
-                session.execute(del_orphans_stmt)
-                
-                session.commit()
-            _log(source_id, "INFO", "Sincronizzazione manuale completata: rimosse voci non più presenti")
-        except Exception as e:
-            _log(source_id, "ERROR", f"Errore sincronizzazione manuale: {e}")
-            logger.error(f"[{source_name}] Sync error: {e}")
+                    # c) Pulisce gli IOC orfani dal sistema
+                    del_orphans_stmt = delete(Ioc).where(Ioc.id.in_(true_orphans))
+                    session.execute(del_orphans_stmt)
+            
+            session.commit()
+        _log(source_id, "INFO", "Sincronizzazione completata: rimosse voci non più presenti nella sorgente")
+    except Exception as e:
+        _log(source_id, "ERROR", f"Errore sincronizzazione: {e}")
+        logger.error(f"[{source_name}] Sync error: {e}")
 
     # 5. Aggiorna sempre last_fetched
     _update_last_fetched(source_id)

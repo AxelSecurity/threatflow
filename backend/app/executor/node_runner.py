@@ -86,7 +86,7 @@ def run_processing_node(node, iocs: list, flow_id: str) -> list:
             # 2. Identifichiamo gli IOC in Aging (presenti nel DB ma non nell'input)
             for key, db_record in state.items():
                 if key not in incoming_keys:
-                    # Se non è già in fase di scadenza (expires_at lontano nel futuro), iniziamo il countdown
+                    # Se non è già in fase di scadenza, iniziamo il countdown
                     # Usiamo un margine di 1 anno per indicare il "non aging"
                     is_currently_aging = db_record.expires_at and (db_record.expires_at - now).total_seconds() < 31536000 # 1 anno
                     
@@ -104,8 +104,14 @@ def run_processing_node(node, iocs: list, flow_id: str) -> list:
                             "_expires_at": db_record.expires_at.isoformat()
                         })
             
-            # NOTA: _update_node_state verrà chiamato dopo e salverà tutto
-            return result
+            # Salviamo le modifiche agli expires_at degli IOC in aging
+            session.commit()
+        
+        # BUG FIX: Salviamo lo stato del nodo aging su NodeIoc.
+        # Senza questo, al ciclo successivo il nodo aging ha memoria vuota
+        # e non può individuare gli IOC che ha già visto → il countdown non parte mai.
+        _update_node_state(flow_id, node.id, result)
+        return result
 
     elif t == "filter_type":
         target = cfg.get("ioc_type")
@@ -219,12 +225,15 @@ def _update_node_state(flow_id: str, node_id: str, iocs: list):
         
         if objs:
             stmt = insert(NodeIoc).values(objs)
-            curr = datetime.now(timezone.utc)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["flow_id", "node_id", "ioc_id"],
                 set_={
-                    "expires_at": stmt.excluded.expires_at,
-                    "source_node_id": stmt.excluded.source_node_id,
+                    # Per gli IOC attivi (expires_at lontano 10 anni) NON vogliamo
+                    # sovrascrivere un expires_at già in countdown (aging avviato).
+                    # Teniamo sempre il valore PIU' VICINO (LEAST) così se l'aging
+                    # è partito non viene mai resettato da un refresh attivo.
+                    "expires_at": func.least(stmt.excluded.expires_at, NodeIoc.expires_at),
+                    "source_node_id": func.coalesce(stmt.excluded.source_node_id, NodeIoc.source_node_id),
                     "last_seen_at": func.coalesce(stmt.excluded.last_seen_at, NodeIoc.last_seen_at)
                 }
             )
