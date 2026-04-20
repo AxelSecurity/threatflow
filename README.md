@@ -42,8 +42,11 @@ Pipeline: **ingest → processing → output** — da feed esterni a SIEM, firew
 | Monitoraggio real-time con badge e polling | ✅ |
 | Aging dinamico con Grace Period e countdown UI | ✅ |
 | Validazione strutturale "Golden Path" e Guida Flusso | ✅ |
+| Gestione Multi-flow e Dashboard Flow dedicata | ✅ |
+| Editor a Tab persistenti con stato localStorage | ✅ |
 | Connettore TAXII | ⚠️ |
 | Connettore MISP | 🔜 |
+
 
 
 ---
@@ -70,12 +73,14 @@ Il sistema di Aging è il "cuore stateful" della piattaforma. Gestisce il ciclo 
 
 **Monitoraggio in tempo reale**: Cliccando su un nodo di Aging, avrai accesso a una tabella dedicata che mostra esattamente quali IOC sono "spariti" dalle sorgenti ma sono ancora trattenuti dal sistema, con tanto di countdown al secondo e indicizzazione della sorgente di provenienza.
 
-### 📊 Dashboard Dinamica (Flow Console)
-Il modulo FlowEditor è stato trasformato in una vera e propria console di controllo operativo:
+### 📊 Dashboard Dinamica & Multi-flow
+Il modulo FlowEditor è stato trasformato in una vera e propria console di controllo operativo multi-pipeline:
+- **Gestione Multi-flow**: Possibilità di creare e gestire flussi indipendenti per diversi casi d'uso (es. "Threat Intel Feed", "Internal Malware Sweep").
+- **Sistema a Tab Persistenti**: Un'interfaccia a tab ispirata agli IDE moderni permette di tenere aperti più flussi contemporaneamente. Lo stato dei tab è salvato nel browser via `localStorage`, garantendo la persistenza tra i refresh.
 - **Real-time Badges**: Visualizzazione immediata del carico di ogni nodo (numero di IOC gestiti) tramite badge color smeraldo.
-- **Node Inspector & Custom Labels**: Ogni nodo di processing e output può essere rinominato per adattarsi alla logica di business (es. "Filtro IP Malevoli", "Export per SIEM Milano").
-- **UX Consolidata**: Gestione intelligente degli eventi che permette di trascinare nodi, creare connessioni tra i pin e aprire le configurazioni senza conflitti di interfaccia.
-- **Live Logs Integration**: Visualizzazione granulare dei log tecnici per singolo nodo, facilitando il debugging di filtri complessi direttamente dal canvas.
+- **Node Inspector & Custom Labels**: Ogni nodo di processing e output può essere rinominato per adattarsi alla logica di business.
+- **Live Logs Integration**: Visualizzazione granulare dei log tecnici per singolo nodo direttamente dal canvas.
+
 
 ### 📐 Validazione Strutturale & Golden Path
 Per aiutare gli analisti a costruire pipeline efficienti, ThreatFlow integra un sistema di validazione basato su **Ranks**:
@@ -373,11 +378,13 @@ Documentazione interattiva completa: http://localhost:8000/api/docs
 
 | Metodo | Path | Descrizione |
 |---|---|---|
-| `GET` | `/flows` | Lista flow |
+| `GET` | `/flows` | Lista flow (overview) |
+| `GET` | `/flows/{id}` | Dettaglio flow con definizione e warning strutturali |
 | `POST` | `/flows` | Crea flow (invia definizione JSON) |
 | `POST` | `/flows/{id}/activate` | Attiva flow |
 | `POST` | `/flows/{id}/deactivate` | Disattiva flow |
 | `DELETE` | `/flows/{id}` | Elimina flow |
+
 
 ### Export
 
