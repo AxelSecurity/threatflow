@@ -110,27 +110,13 @@ def fetch_feed(self, source_id: str):
             deleted_ioc_ids_tuples = session.execute(del_links_stmt).fetchall()
             deleted_ioc_ids = [r[0] for r in deleted_ioc_ids_tuples]
             
-            # 3. Elimina IOC orfani immediatamente (SOLO per manual_in)
-            if feed_type == "manual_in" and deleted_ioc_ids:
-                from app.models.node_ioc import NodeIoc
-                from app.models.tag import IocTag
-                
-                # Identifica quali degli indicatori rimossi sono diventati dei veri orfani
-                true_orphans_stmt = select(Ioc.id).where(Ioc.id.in_(deleted_ioc_ids)).where(~Ioc.id.in_(select(IocSource.ioc_id)))
-                true_orphans = [r[0] for r in session.execute(true_orphans_stmt).fetchall()]
-                
-                if true_orphans:
-                    # a) Pulisce le dipendenze in node_ioc (forzando cancellazione per output nodes)
-                    del_nodeioc_stmt = delete(NodeIoc).where(NodeIoc.ioc_id.in_(true_orphans))
-                    session.execute(del_nodeioc_stmt)
-                    
-                    # b) Pulisce le dipendenze in ioc_tag
-                    del_ioctag_stmt = delete(IocTag).where(IocTag.ioc_id.in_(true_orphans))
-                    session.execute(del_ioctag_stmt)
-
-                    # c) Pulisce gli IOC orfani dal sistema
-                    del_orphans_stmt = delete(Ioc).where(Ioc.id.in_(true_orphans))
-                    session.execute(del_orphans_stmt)
+            # 3. Gli IOC orfani NON vengono eliminati immediatamente.
+            # Il flusso di aging (nodo aging nel flow) ha già salvato lo stato
+            # di questi IOC in node_ioc con un expires_at. Se eliminassimo subito
+            # il record Ioc, il CASCADE su node_ioc.ioc_id distruggerebbe lo stato
+            # del nodo aging e l'IOC sparrebbe dall'output senza rispettare il TTL.
+            # La pulizia degli orfani avviene naturalmente quando tutti i NodeIoc
+            # associati sono scaduti (expires_at < now).
             
             session.commit()
         _log(source_id, "INFO", "Sincronizzazione completata: rimosse voci non più presenti nella sorgente")

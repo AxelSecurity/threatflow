@@ -90,31 +90,34 @@ def execute_ingest_node(self, node_id: str, flow_id: str, force: bool = False):
          f"Nodo [{node.type}]: {len(iocs)} IOC recuperati",
          {"node_id": node_id, "count": len(iocs)})
 
-    if not iocs:
-        # Anche con lista vuota dobbiamo propagare ai successori:
-        # il nodo aging deve poter avere accesso alla sua lista storica
-        # (su DB) per avviare il countdown sugli IOC non più arrivati.
-        # Non interrompiamo il flow qui.
-        pass
-
     successors = parsed.successors(node_id)
     if not successors:
         _log(flow_id, "WARNING",
              f"Nodo [{node_id}] non ha successori — aggiunta diretta al DB",
              {"node_id": node_id})
-        # Nessun successore: persisti direttamente gli IOC nel DB
         from .node_runner import _persist_iocs
         _persist_iocs(iocs, flow_id, node_id)
         return
 
-    for chunk in _chunk(iocs, 2000):
+    if iocs:
+        for chunk in _chunk(iocs, 2000):
+            for succ_id in successors:
+                execute_node.delay(chunk, succ_id, flow_id)
+    else:
+        # Batch vuota: propaghiamo comunque ai successori.
+        # Il nodo aging DEVE ricevere la notifica che questa sorgente ha 0 IOC
+        # per poter avviare il countdown su quelli che aveva visto in precedenza.
         for succ_id in successors:
-            execute_node.delay(chunk, succ_id, flow_id)
+            execute_node.delay([], succ_id, flow_id, source_node_id=node_id)
 
 
 @celery_app.task(bind=True, max_retries=3, retry_backoff=True)
-def execute_node(self, iocs: list, node_id: str, flow_id: str):
-    """Esegue un nodo processing o output con la lista IOC ricevuta."""
+def execute_node(self, iocs: list, node_id: str, flow_id: str, source_node_id: str = None):
+    """Esegue un nodo processing o output con la lista IOC ricevuta.
+
+    source_node_id: propagato quando la batch è vuota per permettere al nodo
+    aging di sapere quale sorgente non sta più inviando IOC.
+    """
     # force=True: i nodi intermedi devono sempre eseguire
     flow_def = _load_flow(flow_id, force=True)
     if not flow_def:
@@ -131,7 +134,7 @@ def execute_node(self, iocs: list, node_id: str, flow_id: str):
 
     if node.category == "processing":
         try:
-            result = run_processing_node(node, iocs, flow_id)
+            result = run_processing_node(node, iocs, flow_id, source_node_id=source_node_id)
         except Exception as exc:
             _log(flow_id, "ERROR",
                  f"Errore nodo processing [{node.type}]: {exc}",
@@ -143,12 +146,20 @@ def execute_node(self, iocs: list, node_id: str, flow_id: str):
              {"node_id": node_id, "in": len(iocs), "out": len(result)})
 
         if not result:
+            # Se non ci sono risultati ma abbiamo un source_node_id, propaghiamo
+            # la batch vuota ai successori per permettere al nodo aging di rilevare
+            # la scomparsa degli IOC da questa sorgente.
+            if source_node_id:
+                for succ_id in parsed.successors(node_id):
+                    execute_node.delay([], succ_id, flow_id, source_node_id=source_node_id)
             return
 
         for succ_id in parsed.successors(node_id):
             execute_node.delay(result, succ_id, flow_id)
 
     elif node.category == "output":
+        if not iocs:
+            return
         try:
             run_output_node(node, iocs, flow_id)
             _log(flow_id, "INFO",

@@ -240,7 +240,7 @@ export default function FlowEditor() {
       defCfg.source_id = sid
       defCfg.source_name = sname
     } else {
-      d.fields.forEach(f=>{ defCfg[f.key] = f.type==='number'?0:f.type==='range'?50:'' })
+      d.fields.forEach(f=>{ defCfg[f.key] = f.type==='number'?0:f.type==='range'?50:f.type==='select'?(f.options?.[0]??''):'' })
     }
     
     setNodes(ns=>[...ns,{id,type:t,x:Math.max(0,p.x-NW/2),y:Math.max(0,p.y-NH/2),cfg:defCfg}])

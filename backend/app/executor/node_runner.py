@@ -44,16 +44,16 @@ def fetch_from_node(node) -> list:
         return []
 
 
-def run_processing_node(node, iocs: list, flow_id: str) -> list:
+def run_processing_node(node, iocs: list, flow_id: str, source_node_id: str = None) -> list:
     """Applica filtri o dedup alla lista IOC e aggiorna lo stato del nodo."""
     t, cfg = node.type, node.config
     
     # Calcola nuovo TTL se è un nodo aging
     ttl_delta = None
     if t == "aging":
-        unit = cfg.get("unit", "hours")
-        val = int(cfg.get("value", 24))
-        mult = {"minutes": 60, "hours": 3600, "days": 86400}.get(unit, 3600)
+        unit = cfg.get("unit") or "minutes"  # '' o None → default "minutes"
+        val = int(cfg.get("value") or 1)
+        mult = {"minutes": 60, "hours": 3600, "days": 86400}.get(unit, 60)
         ttl_sec = val * mult
         
         # Logica Stateful: Carichiamo lo stato attuale del nodo dal DB
@@ -75,25 +75,43 @@ def run_processing_node(node, iocs: list, flow_id: str) -> list:
             result = []
             
             # 1. Processiamo gli IOC in ingresso (Attivi)
+            # Raccogliamo anche i source_node_id presenti nella batch corrente
+            incoming_source_nodes = set()
             for i in iocs:
                 key = (i["value"], i.get("ioc_type"))
                 incoming_keys.add(key)
-                
+                if i.get("_source_node_id"):
+                    incoming_source_nodes.add(i["_source_node_id"])
+
                 i["_ttl"] = None # Active: nessuna scadenza imminente impostata qui
                 i["_is_aging"] = False
                 result.append(i)
-            
+
+            # Se la batch è vuota ma conosciamo la sorgente (parametro esplicito),
+            # usiamo quello per identificare quale source node ha 0 IOC.
+            # Senza questo, il nodo aging non saprebbe quali IOC mettere in aging.
+            if not incoming_source_nodes and source_node_id:
+                incoming_source_nodes = {source_node_id}
+
             # 2. Identifichiamo gli IOC in Aging (presenti nel DB ma non nell'input)
+            # IMPORTANTE: consideriamo solo gli IOC che provengono dagli stessi source_node_id
+            # della batch corrente. Gli IOC di altri input node non devono essere toccati
+            # finché non arriva la loro batch — altrimenti l'aging si attiva per tutti
+            # ogni volta che un qualsiasi input node si aggiorna.
             for key, db_record in state.items():
                 if key not in incoming_keys:
+                    # Salta IOC che provengono da source node non presenti nella batch corrente
+                    if incoming_source_nodes and db_record.source_node_id not in incoming_source_nodes:
+                        continue
+
                     # Se non è già in fase di scadenza, iniziamo il countdown
                     # Usiamo un margine di 1 anno per indicare il "non aging"
                     is_currently_aging = db_record.expires_at and (db_record.expires_at - now).total_seconds() < 31536000 # 1 anno
-                    
+
                     if not is_currently_aging:
                         # Inizia aging ora
                         db_record.expires_at = now + timedelta(seconds=ttl_sec)
-                    
+
                     # Se non è ancora scaduto, lo manteniamo nel flusso
                     if db_record.expires_at > now:
                         result.append({
@@ -106,10 +124,18 @@ def run_processing_node(node, iocs: list, flow_id: str) -> list:
             
             # Salviamo le modifiche agli expires_at degli IOC in aging
             session.commit()
-        
-        # BUG FIX: Salviamo lo stato del nodo aging su NodeIoc.
-        # Senza questo, al ciclo successivo il nodo aging ha memoria vuota
-        # e non può individuare gli IOC che ha già visto → il countdown non parte mai.
+
+        # Assicuriamo che gli IOC attivi esistano nella tabella ioc principale
+        # prima di salvare lo stato del nodo aging.
+        # Per nodi manual_in/http_feed gli IOC non vengono persistiti fino al
+        # nodo di output (che gira DOPO): se saltiamo questo step, ioc_map in
+        # _update_node_state non trova nulla → lo stato è sempre vuoto → il nodo
+        # aging non sa mai che l'IOC era presente → quando sparisce dalla sorgente
+        # non parte il countdown e l'IOC scompare immediatamente dall'output.
+        active_iocs = [i for i in result if not i.get("_is_aging")]
+        if active_iocs:
+            _persist_iocs(active_iocs)  # solo per garantire esistenza in tabella ioc
+
         _update_node_state(flow_id, node.id, result)
         return result
 
@@ -192,52 +218,76 @@ def _update_node_state(flow_id: str, node_id: str, iocs: list):
 
     from datetime import datetime, timezone, timedelta
     from sqlalchemy.dialects.postgresql import insert
-    
+
     fid = uuid.UUID(flow_id) if isinstance(flow_id, str) else flow_id
     now = datetime.now(timezone.utc)
-    
+
     with get_sync_session() as session:
         # 1. Trova gli ID degli IOC per valore/tipo
-        # Nota: assumiamo che siano già salvati dagli ingest precedenti
         values = [i["value"] for i in iocs]
         ioc_map = { (r.value, r.ioc_type): r.id for r in session.query(Ioc.id, Ioc.value, Ioc.ioc_type).filter(Ioc.value.in_(values)).all() }
-        
-        objs = []
+
+        # Separiamo IOC attivi e aging: hanno strategie di upsert diverse
+        active_objs = []
+        aging_objs = []
+
         for i in iocs:
             ioc_id = ioc_map.get((i["value"], i.get("ioc_type")))
-            if not ioc_id: continue
-            
-            # Se l'indicatore è in aging, usiamo la data passata dal nodo, altrimenti rinfreschiamo
+            if not ioc_id:
+                continue
+
             if i.get("_is_aging"):
                 expires_at = datetime.fromisoformat(i["_expires_at"])
+                aging_objs.append({
+                    "flow_id": fid,
+                    "node_id": node_id,
+                    "ioc_id": ioc_id,
+                    "expires_at": expires_at,
+                    "source_node_id": i.get("_source_node_id"),
+                    "last_seen_at": None
+                })
             else:
-                # Active: impostiamo una scadenza molto lontana (10 anni) finché resta nella sorgente
                 expires_at = now + timedelta(days=3650)
+                active_objs.append({
+                    "flow_id": fid,
+                    "node_id": node_id,
+                    "ioc_id": ioc_id,
+                    "expires_at": expires_at,
+                    "source_node_id": i.get("_source_node_id"),
+                    "last_seen_at": now
+                })
 
-            objs.append({
-                "flow_id": fid,
-                "node_id": node_id,
-                "ioc_id": ioc_id,
-                "expires_at": expires_at,
-                "source_node_id": i.get("_source_node_id"),
-                "last_seen_at": now if not i.get("_is_aging") else None # Non rinfreschiamo se è in aging
-            })
-        
-        if objs:
-            stmt = insert(NodeIoc).values(objs)
+        # IOC ATTIVI: sovrascriviamo expires_at direttamente.
+        # Se un IOC torna nella sorgente dopo essere stato in aging, DEVE poter
+        # recuperare lo stato attivo (expires_at = 10 anni). func.least() non va
+        # usato qui perché impedirebbe il recovery.
+        if active_objs:
+            stmt = insert(NodeIoc).values(active_objs)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["flow_id", "node_id", "ioc_id"],
                 set_={
-                    # Per gli IOC attivi (expires_at lontano 10 anni) NON vogliamo
-                    # sovrascrivere un expires_at già in countdown (aging avviato).
-                    # Teniamo sempre il valore PIU' VICINO (LEAST) così se l'aging
-                    # è partito non viene mai resettato da un refresh attivo.
-                    "expires_at": func.least(stmt.excluded.expires_at, NodeIoc.expires_at),
+                    "expires_at": stmt.excluded.expires_at,
                     "source_node_id": func.coalesce(stmt.excluded.source_node_id, NodeIoc.source_node_id),
-                    "last_seen_at": func.coalesce(stmt.excluded.last_seen_at, NodeIoc.last_seen_at)
+                    "last_seen_at": stmt.excluded.last_seen_at
                 }
             )
             session.execute(stmt)
+
+        # IOC AGING: usiamo func.least() per non resettare un countdown già avviato.
+        # Se l'IOC è già in aging con un expires_at più vicino, manteniamo quello.
+        if aging_objs:
+            stmt = insert(NodeIoc).values(aging_objs)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["flow_id", "node_id", "ioc_id"],
+                set_={
+                    "expires_at": func.least(stmt.excluded.expires_at, NodeIoc.expires_at),
+                    "source_node_id": func.coalesce(stmt.excluded.source_node_id, NodeIoc.source_node_id),
+                    "last_seen_at": NodeIoc.last_seen_at
+                }
+            )
+            session.execute(stmt)
+
+        if active_objs or aging_objs:
             session.commit()
 
 
