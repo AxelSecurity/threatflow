@@ -29,19 +29,22 @@ Pipeline: **ingest → processing → output** — da feed esterni a SIEM, firew
 | CRUD IOC con filtri, paginazione, tagging | ✅ |
 | Pipeline di processing: validazione → normalizzazione → scoring | ✅ |
 | Connettore HTTP (feed txt / csv / jsonl) | ✅ |
+| Connettore Manual Ingest (inserimento manuale e override) | ✅ |
 | Export flat (plaintext) e JSON | ✅ |
 | Gestione sorgenti: crea, toggle attivo, fetch manuale, elimina | ✅ |
 | Dettaglio sorgente: configurazione, log connettore, IOC recuperati | ✅ |
 | Flow editor visuale con canvas drag-and-drop | ✅ |
-| Parser DAG per flow (rilevamento cicli, validazione nodi) | ✅ |
+| Parser DAG per flow (validazione strutturale, ranking) | ✅ |
 | Scadenza automatica IOC (Celery beat) | ✅ |
 | Dashboard con ricerca, filtri, score visualization | ✅ |
 | Flow executor (esecuzione Celery DAG stateful) | ✅ |
 | Output node verso SIEM / firewall (syslog CEF/RFC) | ✅ |
 | Monitoraggio real-time con badge e polling | ✅ |
 | Aging dinamico con Grace Period e countdown UI | ✅ |
-| Connettore TAXII | 🔜 |
+| Validazione strutturale "Golden Path" e Guida Flusso | ✅ |
+| Connettore TAXII | ⚠️ |
 | Connettore MISP | 🔜 |
+
 
 ---
 
@@ -73,6 +76,18 @@ Il modulo FlowEditor è stato trasformato in una vera e propria console di contr
 - **Node Inspector & Custom Labels**: Ogni nodo di processing e output può essere rinominato per adattarsi alla logica di business (es. "Filtro IP Malevoli", "Export per SIEM Milano").
 - **UX Consolidata**: Gestione intelligente degli eventi che permette di trascinare nodi, creare connessioni tra i pin e aprire le configurazioni senza conflitti di interfaccia.
 - **Live Logs Integration**: Visualizzazione granulare dei log tecnici per singolo nodo, facilitando il debugging di filtri complessi direttamente dal canvas.
+
+### 📐 Validazione Strutturale & Golden Path
+Per aiutare gli analisti a costruire pipeline efficienti, ThreatFlow integra un sistema di validazione basato su **Ranks**:
+1. **Golden Path**: Il sistema suggerisce l'ordine ottimale `Ingest → Filter → Dedup → Aging → Output`.
+2. **Warn-on-violation**: Se provi a inserire un filtro dopo un nodo di Aging (operazione inefficiente), il sistema evidenzia il nodo in **arancione** spiegando il motivo tecnico (risparmio risorse DB).
+3. **Guida Integrata**: Un pannello interattivo "GUIDA FLUSSO" nel canvas spiega i passaggi necessari per una configurazione a regola d'arte.
+
+### ✍️ Manual Ingest & Data Integrity
+Oltre ai feed automatici, ThreatFlow permette l'inserimento manuale tramite il connettore `manual_in`:
+- **Override**: Possibilità di forzare Score e TLP per specifici indicatori.
+- **Sync Mechnism**: Rilevamento automatico degli IOC rimossi manualmente per una pulizia istantanea di tutti i nodi di output collegati.
+
 
 ---
 
@@ -390,16 +405,17 @@ Documentazione interattiva completa: http://localhost:8000/api/docs
 
 ## Roadmap
 
-- [ ] **Step 9** — Flow executor: esecuzione DAG come Celery task-graph
-- [ ] **Step 10** — Connettore TAXII (taxii2client + stix2)
+- [x] **Step 9** — Flow executor: esecuzione DAG come Celery task-graph
+- [x] **Step 12** — Output node backends: siem_out (syslog/CEF), firewall_out (REST)
+- [ ] **Step 10** — Connettore TAXII (completamento logica pool)
 - [ ] **Step 11** — Connettore MISP
-- [ ] **Step 12** — Output node backends: siem_out (syslog/CEF), firewall_out (REST), taxii_out
 - [ ] **Step 13** — Pagina gestione utenti (admin)
 - [ ] **Step 14** — Import batch IOC (upload file)
 - [ ] **Step 15** — Migrazioni Alembic complete
 - [ ] Audit log delle azioni utente
 - [ ] Rate limiting API
 - [ ] Notifiche real-time via WebSocket
+
 
 ---
 
