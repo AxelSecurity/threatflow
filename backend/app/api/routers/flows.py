@@ -46,6 +46,15 @@ def list_flows(db: Annotated[Session, Depends(get_db)]):
     return db.query(Flow).all()
 
 
+@router.get("/{flow_id}", response_model=FlowRead)
+def get_flow(flow_id: UUID, db: Annotated[Session, Depends(get_db)]):
+    flow = db.get(Flow, flow_id)
+    if not flow:
+        raise HTTPException(404)
+    return flow
+
+
+
 
 @router.post("", status_code=201, response_model=FlowRead)
 def create_flow(payload: FlowCreate, db: Annotated[Session, Depends(get_db)]):

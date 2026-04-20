@@ -73,8 +73,7 @@ def parse_flow(definition: dict) -> ParsedFlow:
     return ParsedFlow(nodes=nodes, adj=adj)
 
 def _validate(nodes, adj):
-    if not any(n.category == "ingest" for n in nodes.values()):
-        raise FlowValidationError("Flow must have at least one ingest node")
+
     for id, succs in adj.items():
         if nodes[id].category == "output" and succs:
             raise FlowValidationError(f"Output node {id} cannot have successors")
@@ -118,6 +117,7 @@ def validate_flow_structure(parsed: ParsedFlow) -> list:
             
             # Regola 3: Ingest non dovrebbe avere predecessori (già implicitamente coperto da rank 0)
             # Regola 4: Output non dovrebbe avere successori (coperto da _validate bloccante)
+            pass
 
     # Regola 5: Presenza di Aging (Consigliato per lifecycle)
     if not any(n.type == "aging" for n in parsed.nodes.values()):
@@ -129,5 +129,15 @@ def validate_flow_structure(parsed: ParsedFlow) -> list:
                 "message": "Consiglio: Aggiungi un nodo Aging prima dell'Output per gestire la scadenza degli IOC."
             })
 
+    # Regola 6: Presenza di Ingest
+    if not any(n.category == "ingest" for n in parsed.nodes.values()):
+         warnings.append({
+            "node_id": "flow",
+            "type": "MISSING_INGEST",
+            "message": "Flusso incompleto: Aggiungi almeno un nodo di Ingest per iniziare la raccolta dati."
+        })
+
+
     return warnings
+
 

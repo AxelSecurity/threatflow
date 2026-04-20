@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useFlows, useCreateFlow, useUpdateFlow, useSources, useRunFlow, useFlowLogs, useNodeStats, useNodeAging } from '../hooks/useIocs'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useFlows, useFlow, useCreateFlow, useUpdateFlow, useSources, useRunFlow, useFlowLogs, useNodeStats, useNodeAging } from '../hooks/useIocs'
+
 
 const NW = 168, NH = 62
 
@@ -47,7 +49,9 @@ function outPort(n:NodeData) { return { x:n.x+NW, y:n.y+NH/2 } }
 function inPort(n:NodeData)  { return { x:n.x,    y:n.y+NH/2 } }
 
 export default function FlowEditor() {
-  const [id, setId]       = useState<string | null>(null)
+  const { id: urlId } = useParams()
+  const navigate = useNavigate()
+
   const [nodes, setNodes] = useState<NodeData[]>([])
   const [conns, setConns] = useState<ConnData[]>([])
   const [sel, setSel]     = useState<string|null>(null)
@@ -61,16 +65,20 @@ export default function FlowEditor() {
   const [agingSearch, setAgingSearch] = useState('')
   const [warnings, setWarnings] = useState<any[]>([])
   const [guideOpen, setGuideOpen] = useState(false)
+  const [openFlows, setOpenFlows] = useState<string[]>([])
 
 
-  const { data: flows } = useFlows()
+
+  const { data: flows = [] } = useFlows()
+  const { data: currentFlow, isLoading: isFlowLoading } = useFlow(urlId || null)
   const { data: sources } = useSources()
   const createFlow = useCreateFlow()
   const updateFlow = useUpdateFlow()
   const runFlow    = useRunFlow()
-  const { data: flowLogs = [] } = useFlowLogs(id)
-  const { data: nodeStats = {} } = useNodeStats(id)
-  const { data: agingData } = useNodeAging(id, sel, { page: agingPage, search: agingSearch })
+  const { data: flowLogs = [] } = useFlowLogs(urlId || null)
+  const { data: nodeStats = {} } = useNodeStats(urlId || null)
+  const { data: agingData } = useNodeAging(urlId || null, sel, { page: agingPage, search: agingSearch })
+
 
   const nc = useRef(0)
   const cc = useRef(0)
@@ -78,33 +86,40 @@ export default function FlowEditor() {
   const isInitialLoad = useRef(true)
   const dragMoved = useRef(false)
 
-  // Initialization: load or create flow
+  // Load open flows from storage
   useEffect(() => {
-    if (!flows) return
-    if (flows.length > 0) {
-      const f = flows[0]
-      setId(f.id)
-      setWarnings(f.warnings || [])
-      const def = f.definition as any
-      setNodes(def.nodes?.map((n:any)=>( { 
-        id:n.id, 
-        type:n.type, 
-        x:n.position.x, 
-        y:n.position.y, 
-        cfg:n.config,
-        label:n.label 
-      } )) || [])
-      setConns(def.connections || [])
-      nc.current = def.nodes?.length ? Math.max(...def.nodes.map((n:any)=>parseInt(n.id.replace('n',''))), 0) : 0
-      cc.current = def.connections?.length ? Math.max(...def.connections.map((c:any)=>parseInt(c.id.replace('c',''))), 0) : 0
-    } else {
-      createFlow.mutate({ 
-        name: 'Main Flow', 
-        definition: { nodes: [], connections: [] }
-      })
+    const saved = JSON.parse(localStorage.getItem('tf_open_flows') || '[]')
+    setOpenFlows(saved)
+    
+    // Se l'attuale URL ID non è nella lista open, aggiungilo
+    if (urlId && !saved.includes(urlId)) {
+      const next = [...saved, urlId]
+      setOpenFlows(next)
+      localStorage.setItem('tf_open_flows', JSON.stringify(next))
     }
+  }, [urlId])
 
-  }, [flows])
+  // Sync state when flow data is loaded
+  useEffect(() => {
+    if (!currentFlow) return
+    
+    setWarnings(currentFlow.warnings || [])
+    const def = currentFlow.definition as any
+    setNodes(def.nodes?.map((n:any)=>( { 
+      id:n.id, 
+      type:n.type, 
+      x:n.position.x, 
+      y:n.position.y, 
+      cfg:n.config,
+      label:n.label 
+    } )) || [])
+    setConns(def.connections || [])
+    nc.current = def.nodes?.length ? Math.max(...def.nodes.map((n:any)=>parseInt(n.id.replace('n',''))), 0) : 0
+    cc.current = def.connections?.length ? Math.max(...def.connections.map((c:any)=>parseInt(c.id.replace('c',''))), 0) : 0
+    
+    isInitialLoad.current = true // Reset initial load when switching flows
+  }, [currentFlow?.id])
+
 
   // Auto-save logic
   useEffect(() => {
@@ -112,7 +127,7 @@ export default function FlowEditor() {
       if (nodes.length > 0) isInitialLoad.current = false
       return
     }
-    if (!id) return
+    if (!urlId) return
 
     setSaveStatus('saving')
     const timer = setTimeout(() => {
@@ -128,7 +143,7 @@ export default function FlowEditor() {
         })),
         connections: conns.map(c=>({id:c.id,from:c.from,to:c.to}))
       }
-      updateFlow.mutate({ id, body: { definition } }, {
+      updateFlow.mutate({ id: urlId, body: { definition } }, {
         onSuccess: (data: any) => {
           setWarnings(data.warnings || [])
           setSaveStatus('saved')
@@ -140,7 +155,8 @@ export default function FlowEditor() {
     }, 1500)
 
     return () => clearTimeout(timer)
-  }, [nodes, conns, id])
+  }, [nodes, conns, urlId])
+
 
   const byId = (id:string) => nodes.find(n=>n.id===id)
 
@@ -272,7 +288,7 @@ export default function FlowEditor() {
             <span style={{fontSize:9,color:saveStatus==='error'?'#ff5572':saveStatus==='saved'?'#00dfa0':'#4a5c70',textTransform:'uppercase',letterSpacing:'.05em'}}>
               {saveStatus==='saving'?'Salvataggio...':saveStatus==='saved'?'Salvato':saveStatus==='error'?'Errore salvataggio':'In attesa'}
             </span>
-            {id && (
+            {urlId && (
               <div style={{
                 marginLeft: 18,
                 display: 'flex',
@@ -295,6 +311,44 @@ export default function FlowEditor() {
             )}
           </div>
         </div>
+
+        {/* TABS BAR */}
+        <div style={{ display: 'flex', borderRight: '1px solid #232d3a' }}>
+          {openFlows.map(fId => {
+            const flow = flows.find(f => f.id === fId);
+            const active = urlId === fId;
+            return (
+              <div 
+                key={fId} 
+                onClick={() => navigate(`/flows/${fId}`)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px',
+                  background: active ? '#080b0f' : '#161b23',
+                  borderBottom: active ? '2px solid #00dfa0' : 'none',
+                  borderRight: '1px solid #232d3a',
+                  cursor: 'pointer', transition: 'all 0.1s', minWidth: 100
+                }}
+              >
+                <span style={{ fontSize: 10, color: active ? '#00dfa0' : '#4a5c70', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
+                  {flow?.name || 'Caricamento...'}
+                </span>
+                <span 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const next = openFlows.filter(o => o !== fId);
+                    setOpenFlows(next);
+                    localStorage.setItem('tf_open_flows', JSON.stringify(next));
+                    if (active) navigate(next.length > 0 ? `/flows/${next[0]}` : '/flows');
+                  }}
+                  style={{ fontSize: 12, color: '#3d5268', cursor: 'pointer' }}
+                >
+                  ×
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
         {sel && <button onClick={()=>deleteNode(sel)} style={{background:'rgba(255,85,114,.08)',border:'1px solid rgba(255,85,114,.35)',borderRadius:3,padding:'4px 11px',fontFamily:'var(--mono)',fontSize:10,color:'#ff5572',cursor:'pointer'}}>elimina nodo</button>}
         <button 
           onClick={() => setGuideOpen(!guideOpen)} 
@@ -308,6 +362,7 @@ export default function FlowEditor() {
           GUIDA FLUSSO
         </button>
       </div>
+
 
 
       <div style={{display:'flex',flex:1,overflow:'hidden'}}>
@@ -625,13 +680,14 @@ export default function FlowEditor() {
                 ) : null}
 
                 {/* EXPORT URL FOR OUTPUT NODES ONLY */}
-                {selDef!.cat === 'o' && id && (
+                {selDef!.cat === 'o' && urlId && (
                   <div style={{marginTop:24, paddingTop:16, borderTop:'1px dashed #232d3a'}}>
                     <div style={{fontSize:9, fontWeight:600, color:'#f0a020', textTransform:'uppercase', marginBottom:8}}>URL di Esportazione Dinamica</div>
                     {(() => {
                       const ext = selNode.cfg.format || 'txt';
                       const identifier = selNode.label || selNode.id;
-                      const url = `${window.location.origin}/api/v1/export/node/${id}/${identifier}.${ext}`;
+                      const url = `${window.location.origin}/api/v1/export/node/${urlId}/${identifier}.${ext}`;
+
                       return (
                         <>
                           <div style={{background:'#080b0f', padding:8, borderRadius:4, fontSize:9, color:'#7a92aa', wordBreak:'break-all', fontFamily:'var(--mono)', border:'1px solid #161b23'}}>

@@ -53,10 +53,11 @@ export interface Flow {
   id: string; 
   name: string; 
   active: boolean; 
-  definition: object; 
+  definition: { nodes: any[]; connections: any[] }; 
   created_at: string;
   warnings?: Array<{ node_id: string; type: string; message: string }>;
 }
+
 
 
 export interface FlowLog {
@@ -91,7 +92,9 @@ export const api = {
   },
   flows: {
     list:       ()              => req<Flow[]>('/flows'),
+    get:        (id: string)    => req<Flow>(`/flows/${id}`),
     create:     (body: object)  => req<Flow>('/flows', { method: 'POST', body: JSON.stringify(body) }),
+
     update:     (id: string, body: object) => req<Flow>(`/flows/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     run:        (id: string)    => req<{ detail: string; nodes: number }>(`/flows/${id}/run`, { method: 'POST' }),
     activate:   (id: string)    => req<object>(`/flows/${id}/activate`, { method: 'POST' }),

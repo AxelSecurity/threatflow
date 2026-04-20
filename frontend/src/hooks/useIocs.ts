@@ -75,6 +75,15 @@ export function useFlows() {
   return useQuery({ queryKey: ['flows'], queryFn: api.flows.list })
 }
 
+export function useFlow(id: string | null) {
+  return useQuery({ 
+    queryKey: ['flows', id], 
+    queryFn: () => api.flows.get(id!),
+    enabled: !!id 
+  })
+}
+
+
 export function useFlowLogs(id: string | null) {
   return useQuery({
     queryKey: ['flow-logs', id],
@@ -123,3 +132,12 @@ export function useRunFlow() {
     mutationFn: (id: string) => api.flows.run(id),
   })
 }
+
+export function useDeleteFlow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.flows.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['flows'] }),
+  })
+}
+
