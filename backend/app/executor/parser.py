@@ -7,6 +7,15 @@ NODE_CATEGORIES = {
     "export_flat":"output","siem_out":"output","firewall_out":"output","taxii_out":"output",
 }
 
+NODE_RANKS = {
+    "source_ingest": 0, "http_feed": 0, "taxii_in": 0, "misp_in": 0, "manual_in": 0,
+    "filter_type": 1, "filter_tlp": 1, "filter_score": 1,
+    "dedup": 2,
+    "aging": 3,
+    "export_flat": 4, "siem_out": 4, "firewall_out": 4, "taxii_out": 4,
+}
+
+
 @dataclass
 class FlowNode:
     id: str
@@ -22,6 +31,8 @@ class FlowNode:
 class ParsedFlow:
     nodes: dict
     adj: dict
+    warnings: list = field(default_factory=list)
+
 
     def find_node(self, identifier: str) -> FlowNode | None:
         """Cerca un nodo per ID o per Label (case insensitive)."""
@@ -76,3 +87,47 @@ def _validate(nodes, adj):
         stack.discard(nid)
     for id in nodes:
         if id not in visited: dfs(id)
+
+def validate_flow_structure(parsed: ParsedFlow) -> list:
+    """Verifica la struttura del flow e ritorna una lista di warning non bloccanti."""
+    warnings = []
+    
+    for src_id, successors in parsed.adj.items():
+        src_node = parsed.nodes[src_id]
+        src_rank = NODE_RANKS.get(src_node.type, 1) # Default 1 if unknown process
+
+        for dst_id in successors:
+            dst_node = parsed.nodes[dst_id]
+            dst_rank = NODE_RANKS.get(dst_node.type, 1)
+
+            # Regola 1: Rank ascendente (Ingest -> Filter -> Dedup -> Aging -> Output)
+            if src_rank > dst_rank:
+                warnings.append({
+                    "node_id": dst_id,
+                    "type": "RANK_VIOLATION",
+                    "message": f"Ordine non ottimale: {src_node.type} non dovrebbe precedere {dst_node.type}."
+                })
+            
+            # Regola 2: Aging deve essere l'ultimo processing
+            if src_node.type == "aging" and dst_node.category == "processing":
+                 warnings.append({
+                    "node_id": dst_id,
+                    "type": "POST_AGING_PROCESSING",
+                    "message": "I filtri e la deduplica dovrebbero precedere l'Aging per evitare sprechi di risorse."
+                })
+            
+            # Regola 3: Ingest non dovrebbe avere predecessori (già implicitamente coperto da rank 0)
+            # Regola 4: Output non dovrebbe avere successori (coperto da _validate bloccante)
+
+    # Regola 5: Presenza di Aging (Consigliato per lifecycle)
+    if not any(n.type == "aging" for n in parsed.nodes.values()):
+        # Cerchiamo se c'è almeno un output (se non c'è output il suggerimento è inutile)
+        if any(n.category == "output" for n in parsed.nodes.values()):
+            warnings.append({
+                "node_id": "flow",
+                "type": "MISSING_AGING",
+                "message": "Consiglio: Aggiungi un nodo Aging prima dell'Output per gestire la scadenza degli IOC."
+            })
+
+    return warnings
+

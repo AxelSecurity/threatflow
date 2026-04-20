@@ -29,12 +29,25 @@ class FlowUpdate(BaseModel):
     definition: dict | None = None
 
 
-@router.get("")
+class FlowRead(BaseModel):
+    id: UUID
+    name: str
+    active: bool
+    definition: dict
+    warnings: list = []
+
+    class Config:
+        from_attributes = True
+
+
+
+@router.get("", response_model=list[FlowRead])
 def list_flows(db: Annotated[Session, Depends(get_db)]):
     return db.query(Flow).all()
 
 
-@router.post("", status_code=201)
+
+@router.post("", status_code=201, response_model=FlowRead)
 def create_flow(payload: FlowCreate, db: Annotated[Session, Depends(get_db)]):
     try:
         parse_flow(payload.definition)
@@ -47,7 +60,8 @@ def create_flow(payload: FlowCreate, db: Annotated[Session, Depends(get_db)]):
     return flow
 
 
-@router.patch("/{flow_id}")
+
+@router.patch("/{flow_id}", response_model=FlowRead)
 def patch_flow(flow_id: UUID, payload: FlowUpdate, db: Annotated[Session, Depends(get_db)]):
     flow = db.get(Flow, flow_id)
     if not flow:
@@ -82,6 +96,7 @@ def patch_flow(flow_id: UUID, payload: FlowUpdate, db: Annotated[Session, Depend
         logger.error(f"[api.flows] Errore auto-trigger: {e}")
 
     return flow
+
 
 
 @router.post("/{flow_id}/activate")

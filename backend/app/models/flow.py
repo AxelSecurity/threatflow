@@ -9,3 +9,15 @@ class Flow(UUIDMixin, TimestampMixin, Base):
     active:     Mapped[bool] = mapped_column(Boolean, default=False)
     definition: Mapped[dict] = mapped_column(JSONB, nullable=False)
     logs: Mapped[list["FlowLog"]] = relationship(back_populates="flow", cascade="all, delete-orphan")
+
+    @property
+    def warnings(self) -> list:
+        """Ritorna i warning strutturali del flow."""
+        try:
+            from app.executor.parser import parse_flow, validate_flow_structure
+            parsed = parse_flow(self.definition)
+            return validate_flow_structure(parsed)
+        except Exception:
+            # Se il flow non è parsabile (es. manca ingest), la validazione strutturale è secondaria
+            return []
+

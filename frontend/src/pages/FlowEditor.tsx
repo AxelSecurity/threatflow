@@ -59,6 +59,9 @@ export default function FlowEditor() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [agingPage, setAgingPage] = useState(1)
   const [agingSearch, setAgingSearch] = useState('')
+  const [warnings, setWarnings] = useState<any[]>([])
+  const [guideOpen, setGuideOpen] = useState(false)
+
 
   const { data: flows } = useFlows()
   const { data: sources } = useSources()
@@ -81,6 +84,7 @@ export default function FlowEditor() {
     if (flows.length > 0) {
       const f = flows[0]
       setId(f.id)
+      setWarnings(f.warnings || [])
       const def = f.definition as any
       setNodes(def.nodes?.map((n:any)=>( { 
         id:n.id, 
@@ -99,6 +103,7 @@ export default function FlowEditor() {
         definition: { nodes: [], connections: [] }
       })
     }
+
   }, [flows])
 
   // Auto-save logic
@@ -124,12 +129,14 @@ export default function FlowEditor() {
         connections: conns.map(c=>({id:c.id,from:c.from,to:c.to}))
       }
       updateFlow.mutate({ id, body: { definition } }, {
-        onSuccess: () => {
+        onSuccess: (data: any) => {
+          setWarnings(data.warnings || [])
           setSaveStatus('saved')
           setTimeout(() => setSaveStatus(s => s === 'saved' ? 'idle' : s), 2000)
         },
         onError: () => setSaveStatus('error')
       })
+
     }, 1500)
 
     return () => clearTimeout(timer)
@@ -289,7 +296,19 @@ export default function FlowEditor() {
           </div>
         </div>
         {sel && <button onClick={()=>deleteNode(sel)} style={{background:'rgba(255,85,114,.08)',border:'1px solid rgba(255,85,114,.35)',borderRadius:3,padding:'4px 11px',fontFamily:'var(--mono)',fontSize:10,color:'#ff5572',cursor:'pointer'}}>elimina nodo</button>}
+        <button 
+          onClick={() => setGuideOpen(!guideOpen)} 
+          style={{
+            background: guideOpen ? '#f0a020' : '#1c2330', 
+            border: `1px solid ${guideOpen ? '#f0a020' : '#232d3a'}`,
+            borderRadius:3, padding:'4px 11px', fontFamily:'var(--mono)', fontSize:10, 
+            color: guideOpen ? '#080b0f' : '#f0a020', cursor:'pointer', fontWeight: 700
+          }}
+        >
+          GUIDA FLUSSO
+        </button>
       </div>
+
 
       <div style={{display:'flex',flex:1,overflow:'hidden'}}>
 
@@ -366,8 +385,10 @@ export default function FlowEditor() {
             {/* Nodes */}
             {nodes.map(node=>{
               const d = getDef(node.type)
-              const color = CAT_COLOR[d.cat]
+              const nodeWarnings = warnings.filter(w => w.node_id === node.id)
+              const color = nodeWarnings.length > 0 ? '#f0a020' : CAT_COLOR[d.cat]
               return (
+
                 <div key={node.id}
                   onMouseDown={(e)=>{ 
                     const target = e.target as HTMLElement;
@@ -425,7 +446,18 @@ export default function FlowEditor() {
                       style={{position:'absolute',right:-7,top:'50%',transform:'translateY(-50%)',width:12,height:12,borderRadius:'50%',border:`2px solid ${color}88`,background:'#080b0f',zIndex:10,cursor:'crosshair'}}
                     />
                   )}
+                  {nodeWarnings.length > 0 && (
+                    <div style={{
+                      position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
+                      background: '#f0a020', color: '#080b0f', padding: '1px 8px', borderRadius: 10,
+                      fontSize: 8, fontWeight: 800, border: '2px solid #080b0f', whiteSpace: 'nowrap',
+                      boxShadow: '0 2px 4px rgba(240,160,32,0.3)', zIndex: 100
+                    }}>
+                      ORDINE ERRATO
+                    </div>
+                  )}
                 </div>
+
               )
             })}
           </div>
@@ -641,6 +673,54 @@ export default function FlowEditor() {
           </div>
         )}
       </div>
+
+      {/* FLOW GUIDE OVERLAY */}
+      {guideOpen && (
+        <div style={{
+          position:'absolute', bottom:24, right:24, width:300, background:'#0f1318', 
+          border:'1px solid #f0a020', borderRadius:8, padding:16, zIndex:2000,
+          boxShadow:'0 10px 40px rgba(0,0,0,0.6)'
+        }}>
+          <div style={{display:'flex', justifyContent:'space-between', marginBottom:12}}>
+            <span style={{fontSize:11, fontWeight:800, color:'#f0a020', textTransform:'uppercase'}}>Guida alla Struttura</span>
+            <button onClick={()=>setGuideOpen(false)} style={{background:'transparent', border:'none', color:'#4a5c70', cursor:'pointer', fontSize:14, padding:0}}>×</button>
+          </div>
+          <div style={{fontSize:10, color:'#b0c0d0', lineHeight:1.5, marginBottom:16}}>
+            Per garantire efficienza e integrità del dato, segui l'ordine raccomandato:
+          </div>
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {[
+              { l: '1. Ingest', c: '#00dfa0', v: 'Recupero dati' },
+              { l: '2. Filtri', c: '#f0a020', v: 'Riduzione rumore' },
+              { l: '3. Dedup', c: '#f0a020', v: 'Consolidamento' },
+              { l: '4. Aging', c: '#f0a020', v: 'Gestione cicli vita' },
+              { l: '5. Output', c: '#ff5572', v: 'Destinazione finale' }
+            ].map(step => (
+              <div key={step.l} style={{display:'flex', alignItems:'center', gap:10, background:'#161b23', padding:8, borderRadius:4}}>
+                <div style={{width:6, height:6, borderRadius:1, background:step.c}} />
+                <div>
+                  <div style={{fontSize:10, fontWeight:700, color:'#dde6f0'}}>{step.l}</div>
+                  <div style={{fontSize:9, color:'#4a5c70'}}>{step.v}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {warnings.length > 0 && (
+            <div style={{marginTop:20, paddingTop:12, borderTop:'1px solid #232d3a'}}>
+              <div style={{fontSize:9, fontWeight:800, color:'#ff5572', marginBottom:8}}>PROBLEMI RILEVATI:</div>
+              <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                {warnings.map((w,i)=>(
+                  <div key={i} style={{fontSize:9, color:'#ff5572', background:'rgba(255,85,114,0.05)', padding:6, borderRadius:3, borderLeft:'2px solid #ff5572'}}>
+                    {w.message}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
+
   )
 }

@@ -50,8 +50,14 @@ export interface SourceLog {
 }
 
 export interface Flow {
-  id: string; name: string; active: boolean; definition: object; created_at: string
+  id: string; 
+  name: string; 
+  active: boolean; 
+  definition: object; 
+  created_at: string;
+  warnings?: Array<{ node_id: string; type: string; message: string }>;
 }
+
 
 export interface FlowLog {
   id: string
